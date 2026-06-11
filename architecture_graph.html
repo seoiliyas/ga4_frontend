@@ -1,0 +1,724 @@
+<!DOCTYPE HTML>
+<html>
+
+<head>
+    <meta charset="UTF-8">
+    <title>BrightHorizon — Architecture Graph</title>
+    <style>
+        /* From extension vscode.github */
+        .vscode-dark img[src$=\#gh-light-mode-only],
+        .vscode-light img[src$=\#gh-dark-mode-only],
+        .vscode-high-contrast:not(.vscode-high-contrast-light) img[src$=\#gh-light-mode-only],
+        .vscode-high-contrast-light img[src$=\#gh-dark-mode-only] {
+            display: none;
+        }
+    </style>
+
+    <link rel="stylesheet"
+          href="https://cdn.jsdelivr.net/gh/Microsoft/vscode/extensions/markdown-language-features/media/markdown.css">
+    <link rel="stylesheet"
+          href="https://cdn.jsdelivr.net/gh/Microsoft/vscode/extensions/markdown-language-features/media/highlight.css">
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe WPC', 'Segoe UI', system-ui, 'Ubuntu', 'Droid Sans', sans-serif;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+    </style>
+    <style>
+        .task-list-item {
+            list-style-type: none;
+        }
+
+        .task-list-item-checkbox {
+            margin-left: -20px;
+            vertical-align: middle;
+            pointer-events: none;
+        }
+    </style>
+    <style>
+        :root {
+            --color-note: #0969da;
+            --color-tip: #1a7f37;
+            --color-warning: #9a6700;
+            --color-severe: #bc4c00;
+            --color-caution: #d1242f;
+            --color-important: #8250df;
+        }
+    </style>
+    <style>
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --color-note: #2f81f7;
+                --color-tip: #3fb950;
+                --color-warning: #d29922;
+                --color-severe: #db6d28;
+                --color-caution: #f85149;
+                --color-important: #a371f7;
+            }
+        }
+    </style>
+    <style>
+        .markdown-alert {
+            padding: 0.5rem 1rem;
+            margin-bottom: 16px;
+            color: inherit;
+            border-left: .25em solid #888;
+        }
+
+        .markdown-alert>:first-child {
+            margin-top: 0
+        }
+
+        .markdown-alert>:last-child {
+            margin-bottom: 0
+        }
+
+        .markdown-alert .markdown-alert-title {
+            display: flex;
+            font-weight: 500;
+            align-items: center;
+            line-height: 1
+        }
+
+        .markdown-alert .markdown-alert-title .octicon {
+            margin-right: 0.5rem;
+            display: inline-block;
+            overflow: visible !important;
+            vertical-align: text-bottom;
+            fill: currentColor;
+        }
+
+        .markdown-alert.markdown-alert-note {
+            border-left-color: var(--color-note);
+        }
+
+        .markdown-alert.markdown-alert-note .markdown-alert-title {
+            color: var(--color-note);
+        }
+
+        .markdown-alert.markdown-alert-important {
+            border-left-color: var(--color-important);
+        }
+
+        .markdown-alert.markdown-alert-important .markdown-alert-title {
+            color: var(--color-important);
+        }
+
+        .markdown-alert.markdown-alert-warning {
+            border-left-color: var(--color-warning);
+        }
+
+        .markdown-alert.markdown-alert-warning .markdown-alert-title {
+            color: var(--color-warning);
+        }
+
+        .markdown-alert.markdown-alert-tip {
+            border-left-color: var(--color-tip);
+        }
+
+        .markdown-alert.markdown-alert-tip .markdown-alert-title {
+            color: var(--color-tip);
+        }
+
+        .markdown-alert.markdown-alert-caution {
+            border-left-color: var(--color-caution);
+        }
+
+        .markdown-alert.markdown-alert-caution .markdown-alert-title {
+            color: var(--color-caution);
+        }
+    </style>
+
+</head>
+
+<body class="vscode-body vscode-light">
+    <span id="markdown-mermaid" aria-hidden="true"
+          data-config="{&quot;darkModeTheme&quot;:&quot;dark&quot;,&quot;lightModeTheme&quot;:&quot;default&quot;,&quot;maxTextSize&quot;:50000,&quot;clickDrag&quot;:&quot;alt&quot;,&quot;showControls&quot;:&quot;onHoverOrFocus&quot;,&quot;resizable&quot;:true,&quot;maxHeight&quot;:&quot;&quot;}"></span>
+    <h1 id="brighthorizon--architecture-graph">BrightHorizon — Architecture Graph</h1>
+    <h2 id="high-level-system-architecture">High-Level System Architecture</h2>
+    <pre class="mermaid">graph TB
+            subgraph Client["🖥️ Frontend — Vite + React (pnpm monorepo)"]
+                Browser["Browser (SPA)"]
+                GTMApp["GTM App (:5173)"]
+                GA4App["GA4 App (:5174)"]
+            end
+
+            subgraph CloudflarePages["☁️ Cloudflare Pages"]
+                StaticGTM["brighthorizon-gtm.pages.dev"]
+                StaticGA4["brighthorizon-ga4.pages.dev"]
+            end
+
+            subgraph CloudflareWorker["⚡ Cloudflare Worker (single API)"]
+                Worker["worker/index.ts"]
+                AuthRoutes["Auth Routes"]
+                SessionRoutes["Session Routes"]
+                ChatRoutes["Chat Route (chatMode: 'gtm'|'ga4')"]
+                GA4OAuthRoutes["GA4 OAuth Routes"]
+            end
+        
+            subgraph CloudflareStorage["🗄️ Cloudflare Storage"]
+                D1["D1: gtm_chat_history"]
+                KV["KV: GTM_CONTAINER"]
+            end
+        
+            subgraph External["🌐 External APIs"]
+                Gemini["Google Gemini API (gemini-3.1-pro-preview)"]
+                GA4Data["GA4 Data API"]
+                GA4Admin["GA4 Admin API"]
+                QuickChart["QuickChart.io (Chart rendering)"]
+            end
+        
+            Browser --&gt;|"Served from"| StaticGTM
+            Browser --&gt;|"Served from"| StaticGA4
+            Browser --&gt;|"REST + SSE"| Worker
+            Worker --&gt;|"SQL Queries"| D1
+            Worker --&gt;|"Cache Read/Write"| KV
+            Worker --&gt;|"Context Cache + Streaming"| Gemini
+            Worker --&gt;|"Function Calling"| GA4Data
+            Worker --&gt;|"Function Calling"| GA4Admin
+            Worker --&gt;|"Chart images"| QuickChart
+            GTMApp -.->|"local dev proxy"| Worker
+            GA4App -.->|"local dev proxy"| Worker
+        
+            style Client fill:#e8f4fd,stroke:#1a3a5c,color:#1a2a3a
+            style CloudflarePages fill:#fff3d6,stroke:#e8a317,color:#1a2a3a
+            style CloudflareWorker fill:#e0f7fa,stroke:#007a87,color:#1a2a3a
+            style CloudflareStorage fill:#f3e5f5,stroke:#7b1fa2,color:#1a2a3a
+            style External fill:#fce4ec,stroke:#c62828,color:#1a2a3a</pre>
+    <hr>
+    <h2 id="frontend-component-tree">Frontend Component Tree (pnpm Monorepo)</h2>
+    <pre class="mermaid">graph TD
+            subgraph GTMApp["frontend/apps/gtm/src/"]
+                GTMMain["main.tsx"]
+                GTMAppNode["App.tsx"]
+                GTMAuthPage["AuthPage.tsx"]
+            end
+
+            subgraph GA4App["frontend/apps/ga4/src/"]
+                GA4Main["main.tsx"]
+                GA4AppNode["App.tsx"]
+                GA4AuthPage["AuthPage.tsx"]
+            end
+
+            subgraph Shared["frontend/packages/shared/src/"]
+                AuthProvider["context/AuthContext.tsx (AuthProvider)"]
+                AuthContext["useAuth hook"]
+                Dashboard["components/Dashboard.tsx"]
+                Sidebar["components/Sidebar.tsx"]
+                ChatOutline["components/ChatOutline.tsx"]
+                Ga4Settings["components/Ga4Settings.tsx"]
+                InviteKeyPanel["components/InviteKeyPanel.tsx"]
+                Toast["components/Toast.tsx (ToastProvider)"]
+                AuthApi["services/authApi.ts (createAuthApi)"]
+                ChatApi["services/chatApi.ts (createChatApi)"]
+                CleanJson["utils/clean-json.ts"]
+                GtmMinifier["utils/gtm-minifier.ts"]
+            end
+
+            GTMMain --> GTMAppNode
+            GTMAppNode --> GTMAuthPage
+            GTMAuthPage --> AuthContext
+
+            GA4Main --> GA4AppNode
+            GA4AppNode --> GA4AuthPage
+            GA4AuthPage --> AuthContext
+
+            GTMAppNode --> AuthProvider
+            GA4AppNode --> AuthProvider
+
+            GTMAppNode --> Sidebar
+            GTMAppNode --> Dashboard
+            GA4AppNode --> Sidebar
+            GA4AppNode --> Dashboard
+
+            AuthProvider --> AuthContext
+            AuthProvider --> AuthApi
+            Sidebar --> ChatApi
+            Dashboard --> ChatApi
+            Sidebar --> ChatOutline
+            Sidebar --> InviteKeyPanel
+            Dashboard --> Ga4Settings
+        
+            style GTMApp fill:#e8f4fd,stroke:#1a3a5c
+            style GA4App fill:#fff3d6,stroke:#e8a317
+            style Shared fill:#e0f7fa,stroke:#007a87</pre>
+    <hr>
+    <h2 id="service-layer--frontend-api-clients">Service Layer — Frontend API Clients</h2>
+    <pre class="mermaid">graph LR
+            subgraph Services["src/services/"]
+                authApi["authApi.ts"]
+                chatApi["chatApi.ts"]
+            end
+        
+            subgraph AuthMethods["authApi methods"]
+                bootstrap["bootstrap()"]
+                signup["signup()"]
+                login["login()"]
+                logout["logout()"]
+                getMe["getMe()"]
+                genInvite["generateInviteKey()"]
+                getInviteKeys["getInviteKeys()"]
+            end
+        
+            subgraph ChatMethods["chatApi methods"]
+                getSessions["getSessions()"]
+                createSession["createSession()"]
+                renameSession["renameSession()"]
+                deleteSession["deleteSession()"]
+                getMessages["getMessages()"]
+                sendStream["sendMessageStream() (GTM SSE + GA4 JSON)"]
+                setSessionGa4Property["setSessionGa4Property()"]
+                getGa4OAuthStatus["getGa4OAuthStatus()"]
+                disconnectGa4OAuth["disconnectGa4OAuth()"]
+                getGa4Properties["getGa4Properties()"]
+            end
+        
+            authApi --&gt; bootstrap
+            authApi --&gt; signup
+            authApi --&gt; login
+            authApi --&gt; logout
+            authApi --&gt; getMe
+            authApi --&gt; genInvite
+            authApi --&gt; getInviteKeys
+        
+            chatApi --&gt; getSessions
+            chatApi --&gt; createSession
+            chatApi --&gt; renameSession
+            chatApi --&gt; deleteSession
+            chatApi --&gt; getMessages
+            chatApi --&gt; sendStream
+            chatApi --&gt; setSessionGa4Property
+            chatApi --&gt; getGa4OAuthStatus
+            chatApi --&gt; disconnectGa4OAuth
+            chatApi --&gt; getGa4Properties
+        
+            style authApi fill:#fce4ec,stroke:#c62828
+            style chatApi fill:#e0f7fa,stroke:#007a87</pre>
+    <hr>
+    <h2 id="backend-api-route-map">Backend API Route Map</h2>
+    <pre class="mermaid">graph TD
+            Entry["Worker fetch handler"]
+            CORS["CORS Preflight (OPTIONS)"]
+        
+            subgraph AuthRoutes["🔓 Auth Routes (No token required)"]
+                bootstrap["/api/auth/bootstrap — POST"]
+                signup["/api/auth/signup — POST"]
+                login["/api/auth/login — POST"]
+                logout["/api/auth/logout — POST"]
+                me["/api/auth/me — GET 🔒"]
+                invite["/api/auth/invite — POST 🔒"]
+                inviteKeys["/api/auth/invite-keys — GET 🔒"]
+            end
+        
+            subgraph ProtectedRoutes["🔒 Protected Routes (Bearer token)"]
+                listSessions["GET /api/sessions"]
+                createSession["POST /api/sessions"]
+                renameSession["PATCH /api/sessions/:id"]
+                deleteSession["DELETE /api/sessions/:id"]
+                getMessages["GET /api/sessions/:id/messages"]
+                setGa4Property["PUT /api/sessions/:id/property"]
+                chat["POST /api/chat (chatMode: 'gtm'|'ga4')"]
+            end
+        
+            subgraph GA4Routes["🔧 GA4 OAuth + Property Routes"]
+                ga4OAuthAuthorize["/api/ga4/oauth/authorize — GET"]
+                ga4OAuthCallback["/api/ga4/oauth/callback — GET (Google redirect)"]
+                ga4OAuthStatus["/api/ga4/oauth/status — GET 🔒"]
+                ga4OAuthDisconnect["/api/ga4/oauth/disconnect — POST 🔒"]
+                ga4Properties["/api/ga4/properties — GET 🔒"]
+            end
+        
+            Entry --&gt; CORS
+            Entry --&gt; AuthRoutes
+            Entry --&gt; ProtectedRoutes
+            Entry --&gt; GA4Routes
+            ProtectedRoutes --&gt;|"authenticate()"| D1Check["D1: auth_tokens + users"]
+        
+            style Entry fill:#fff3d6,stroke:#e8a317
+            style AuthRoutes fill:#fce4ec,stroke:#c62828
+            style ProtectedRoutes fill:#e0f7fa,stroke:#007a87
+            style GA4Routes fill:#f3e5f5,stroke:#7b1fa2</pre>
+    <hr>
+    <h2 id="database-schema-d1--sqlite">Database Schema (D1 / SQLite)</h2>
+    <pre class="mermaid">erDiagram
+            users {
+                TEXT id PK
+                TEXT username UK
+                TEXT email UK
+                TEXT password
+                TEXT app
+                INTEGER created_at
+                INTEGER updated_at
+            }
+        
+            auth_tokens {
+                TEXT token PK
+                TEXT user_id FK
+                INTEGER created_at
+                INTEGER expires_at
+            }
+        
+            invite_keys {
+                TEXT invite_key PK
+                TEXT app
+                TEXT created_by FK
+                TEXT used_by FK
+                INTEGER used_at
+                INTEGER created_at
+            }
+        
+            sessions {
+                TEXT id PK
+                TEXT title
+                TEXT mode
+                TEXT ga4_property_id
+                TEXT user_id FK
+                INTEGER created_at
+                INTEGER updated_at
+            }
+        
+            messages {
+                INTEGER id PK
+                TEXT session_id FK
+                TEXT role
+                TEXT text
+                TEXT charts
+                INTEGER created_at
+            }
+        
+            ga4_oauth_tokens {
+                TEXT user_id PK
+                TEXT access_token
+                TEXT refresh_token
+                INTEGER token_expiry
+                TEXT scope
+                TEXT connected_email
+                INTEGER created_at
+                INTEGER updated_at
+            }
+        
+            users ||--o{ auth_tokens : "has"
+            users ||--o{ invite_keys : "created_by"
+            users ||--o{ invite_keys : "used_by"
+            users ||--o{ sessions : "owns"
+            users ||--o{ ga4_oauth_tokens : "connects"
+            sessions ||--o{ messages : "contains (CASCADE)"</pre>
+    <hr>
+    <h2 id="chat-streaming-flow-sse">Chat Streaming Flow (SSE) — GTM Mode</h2>
+    <pre class="mermaid">sequenceDiagram
+            participant U as User (Browser)
+            participant D as Dashboard.tsx
+            participant C as chatApi.ts
+            participant W as Worker (CF)
+            participant DB as D1 Database
+            participant KV as KV Store
+            participant G as Gemini API
+        
+            U-&gt;&gt;D: Types question + clicks Send
+            D-&gt;&gt;D: Append user msg to state
+            D-&gt;&gt;D: Append empty model msg placeholder
+            D-&gt;&gt;C: sendMessageStream(sessionId, question)
+            C-&gt;&gt;W: POST /api/chat {sessionId, question, mode: "gtm"}
+        
+            W-&gt;&gt;DB: Verify session ownership
+            W-&gt;&gt;DB: Load message history (SELECT)
+            W-&gt;&gt;KV: Check cached Gemini context
+        
+            alt Cache exists
+                KV--&gt;&gt;W: Return cache name
+            else Cache expired
+                W-&gt;&gt;G: Create new context cache (container JSON)
+                G--&gt;&gt;W: Return cache name
+                W-&gt;&gt;KV: Store cache name (TTL 30m)
+            end
+        
+            W-&gt;&gt;G: generateContentStream(history + question)
+        
+            loop SSE chunks
+                G--&gt;&gt;W: text chunk
+                W--&gt;&gt;C: data: {"text":"..."}
+                C--&gt;&gt;D: onChunk(text)
+                D-&gt;&gt;D: Append chunk to model msg
+            end
+        
+            W--&gt;&gt;C: data: [DONE]
+            W-&gt;&gt;DB: INSERT user + model messages
+            W-&gt;&gt;DB: UPDATE session.updated_at
+        
+            D-&gt;&gt;D: Auto-title if first reply
+            D-&gt;&gt;C: renameSession(title)
+            C-&gt;&gt;W: PATCH /api/sessions/:id</pre>
+    <hr>
+    <h2 id="ga4-function-calling-flow">GA4 Function Calling Flow</h2>
+    <pre class="mermaid">sequenceDiagram
+            participant U as User (Browser)
+            participant D as Dashboard.tsx
+            participant C as chatApi.ts
+            participant W as Worker (CF)
+            participant DB as D1 Database
+            participant G as Gemini API
+            participant GA4 as GA4 APIs
+            participant QC as QuickChart.io
+        
+            U-&gt;&gt;D: Types question + clicks Send
+            D-&gt;&gt;C: sendMessage(sessionId, question, mode: "ga4")
+            C-&gt;&gt;W: POST /api/chat {sessionId, question, mode: "ga4"}
+        
+            W-&gt;&gt;DB: Verify session ownership
+            W-&gt;&gt;DB: Load message history
+        
+            Note over W: Auth validates: Bearer token + X-BrightHorizon-App header (or URL inference for OAuth)
+        
+            loop Up to 20 tool turns
+                W-&gt;&gt;G: generateContent() with 9 function declarations
+                G--&gt;&gt;W: function_call (e.g., runReport or create_chart)
+                alt GA4 API call
+                    W-&gt;&gt;GA4: Execute GA4 API call
+                    GA4--&gt;&gt;W: Return data
+                else Chart rendering
+                    W-&gt;&gt;QC: QuickChart.io API
+                    QC--&gt;&gt;W: Return chart image URL
+                end
+                W-&gt;&gt;G: Return function result
+            end
+        
+            G--&gt;&gt;W: Final text response
+            W--&gt;&gt;C: JSON response
+            C--&gt;&gt;D: onMessage(text)
+            D-&gt;&gt;DB: INSERT user + model messages</pre>
+    <hr>
+    <h2 id="authentication-flow">Authentication Flow</h2>
+    <pre class="mermaid">sequenceDiagram
+            participant U as User
+            participant AP as AuthPage
+            participant AC as AuthContext
+            participant AA as authApi.ts
+            participant W as Worker
+            participant DB as D1
+        
+            Note over U,DB: --- Sign Up (First User — Bootstrap) ---
+        
+            U-&gt;&gt;AP: Fill username, email, password (no invite key)
+            AP-&gt;&gt;AC: bootstrap(username, email, password)
+            AC-&gt;&gt;AA: authApi.bootstrap(...)
+            AA-&gt;&gt;W: POST /api/auth/bootstrap
+            W-&gt;&gt;DB: COUNT users
+            DB--&gt;&gt;W: 0 users
+            W-&gt;&gt;W: hashPassword (PBKDF2)
+            W-&gt;&gt;DB: INSERT user
+            W-&gt;&gt;W: generateToken()
+            W-&gt;&gt;DB: INSERT auth_token (30-day expiry)
+            W--&gt;&gt;AA: {token, user}
+            AA--&gt;&gt;AC: setToken + setUser
+            AC--&gt;&gt;AP: isAuthenticated = true
+            AP--&gt;&gt;U: Redirect to AuthenticatedApp
+        
+            Note over U,DB: --- Subsequent Login ---
+        
+            U-&gt;&gt;AP: Fill email, password
+            AP-&gt;&gt;AC: login(email, password)
+            AC-&gt;&gt;AA: authApi.login(...)
+            AA-&gt;&gt;W: POST /api/auth/login
+            W-&gt;&gt;DB: SELECT user by email
+            W-&gt;&gt;W: verifyPassword (PBKDF2)
+            W-&gt;&gt;DB: INSERT new auth_token
+            W--&gt;&gt;AA: {token, user}
+        
+            Note over U,DB: --- Token Validation on Reload ---
+        
+            U-&gt;&gt;AP: Page refresh
+            AC-&gt;&gt;AC: getToken() from localStorage
+            AC-&gt;&gt;AA: authApi.getMe()
+            AA-&gt;&gt;W: GET /api/auth/me (Bearer token + X-BrightHorizon-App header)
+            W-&gt;&gt;DB: JOIN auth_tokens + users
+            W--&gt;&gt;AA: {user}</pre>
+    <hr>
+    <h2 id="deployment-topology">Deployment Topology</h2>
+    <pre class="mermaid">graph TB
+            subgraph Dev["🖥️ Local Development"]
+                GTMVite["Vite GTM (:5173)"]
+                GA4Vite["Vite GA4 (:5174)"]
+                WranglerDev["Wrangler Dev (:8787)"]
+            end
+        
+            subgraph Prod["☁️ Production (Cloudflare)"]
+                GTMProd["brighthorizon-gtm.pages.dev"]
+                GA4Prod["brighthorizon-ga4.pages.dev"]
+                WorkerProd["gtm-auditor-server (Worker)"]
+                D1Prod["D1: gtm_chat_history"]
+                KVProd["KV: GTM_CONTAINER"]
+            end
+        
+            subgraph Config["⚙️ Config Files"]
+                ViteConfigGtm["apps/gtm/vite.config.ts"]
+                ViteConfigGa4["apps/ga4/vite.config.ts"]
+                WranglerToml["wrangler.toml (root)"]
+                EnvFile[".env / .env.production"]
+            end
+        
+            ViteConfigGtm --&gt;|"configures"| GTMVite
+            ViteConfigGa4 --&gt;|"configures"| GA4Vite
+            ViteConfigGtm --&gt;|"builds"| GTMProd
+            ViteConfigGa4 --&gt;|"builds"| GA4Prod
+            WranglerToml --&gt;|"configures"| WranglerDev
+            WranglerToml --&gt;|"deploys"| WorkerProd
+            WorkerProd --&gt; D1Prod
+            WorkerProd --&gt; KVProd
+            GTMVite --&gt;|"proxies to"| WranglerDev
+            GA4Vite --&gt;|"proxies to"| WranglerDev
+        
+            style Dev fill:#e8f5e9,stroke:#2e7d32
+            style Prod fill:#e8f4fd,stroke:#1a3a5c
+            style Config fill:#fff3d6,stroke:#e8a317</pre>
+    <hr>
+    <h2 id="file-level-dependency-graph">File-Level Dependency Graph</h2>
+    <pre class="mermaid">graph TD
+            subgraph FrontendApps["frontend/apps/"]
+                GTMApp["gtm/src/App.tsx"]
+                GA4App["ga4/src/App.tsx"]
+                GTMAuthPage["gtm/src/AuthPage.tsx"]
+                GA4AuthPage["ga4/src/AuthPage.tsx"]
+            end
+
+            subgraph SharedPackage["frontend/packages/shared/src/"]
+                AuthProvider["context/AuthContext.tsx (AuthProvider)"]
+                Dashboard["Dashboard.tsx"]
+                Sidebar["Sidebar.tsx"]
+                AuthContext["context/AuthContext.tsx (useAuth hook)"]
+                AuthApiSvc["services/authApi.ts"]
+                ChatApiSvc["services/chatApi.ts"]
+            end
+
+            subgraph Backend["worker/"]
+                WorkerIndex["index.ts (Entry)"]
+                AuthRoutes["routes/auth.ts"]
+                SessionRoutes["routes/sessions.ts"]
+                ChatRoutes["routes/chat.ts"]
+                GA4OAuthRoutes["routes/ga4-oauth.ts"]
+                GtmChat["services/gtm-chat.ts (SSE streaming)"]
+                GA4Chat["services/ga4/chat.ts (function calling)"]
+                GA4Api["services/ga4/api.ts (executeGA4Function)"]
+                GA4OAuthSvc["services/ga4/oauth.ts"]
+                Charts["services/ga4/tools/charts.ts"]
+                AuthMiddleware["middleware/auth.ts"]
+                HttpUtils["utils/http.ts"]
+                CryptoUtils["utils/crypto.ts"]
+                Types["types.ts"]
+            end
+        
+            subgraph Config["Config Files"]
+                RootPkg["package.json"]
+                Workspace["pnpm-workspace.yaml"]
+                ViteConfigGtm["apps/gtm/vite.config.ts"]
+                ViteConfigGa4["apps/ga4/vite.config.ts"]
+                WorkerTsConfig["worker/tsconfig.json"]
+                Wrangler["wrangler.toml"]
+                Schema["schema.sql"]
+            end
+        
+            GTMApp --> AuthContext
+            GA4App --> AuthContext
+            GTMApp --> Dashboard
+            GA4App --> Dashboard
+            GTMAuthPage --> AuthContext
+            GA4AuthPage --> AuthContext
+
+            Dashboard --> ChatApiSvc
+            Sidebar --> ChatApiSvc
+            AuthProvider --> AuthApiSvc
+
+            WorkerIndex --> AuthRoutes
+            WorkerIndex --> SessionRoutes
+            WorkerIndex --> ChatRoutes
+            WorkerIndex --> GA4OAuthRoutes
+            ChatRoutes --> GtmChat
+            ChatRoutes --> GA4Chat
+            GA4Chat --> GA4Api
+            GA4Chat --> Charts
+            Charts --> QuickChart
+            GA4OAuthRoutes --> AuthMiddleware
+            AuthRoutes --> AuthMiddleware
+            AuthRoutes --> CryptoUtils
+        
+            style FrontendApps fill:#e8f4fd,stroke:#1a3a5c
+            style SharedPackage fill:#e0f7fa,stroke:#007a87
+            style Backend fill:#f3e5f5,stroke:#7b1fa2
+            style Config fill:#fff3d6,stroke:#e8a317</pre>
+    <hr>
+    <h2 id="project-stats">Project Stats</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>Metric</th>
+                <th>Value</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td><strong>Frontend Framework</strong></td>
+                <td>React 19.2.5 + Vite 6.4.2</td>
+            </tr>
+            <tr>
+                <td><strong>Styling</strong></td>
+                <td>Tailwind CSS v4.2.4</td>
+            </tr>
+            <tr>
+                <td><strong>Backend Runtime</strong></td>
+                <td>Cloudflare Worker</td>
+            </tr>
+            <tr>
+                <td><strong>Database</strong></td>
+                <td>Cloudflare D1 (SQLite)</td>
+            </tr>
+            <tr>
+                <td><strong>Cache</strong></td>
+                <td>Cloudflare KV</td>
+            </tr>
+            <tr>
+                <td><strong>AI Model</strong></td>
+                <td>Gemini 3.1 Pro Preview</td>
+            </tr>
+            <tr>
+                <td><strong>Auth Strategy</strong></td>
+                <td>PBKDF2 password hashing + Bearer tokens (30-day expiry)</td>
+            </tr>
+            <tr>
+                <td><strong>Invite System</strong></td>
+                <td>One-time-use invite keys</td>
+            </tr>
+            <tr>
+                <td><strong>Streaming</strong></td>
+                <td>Server-Sent Events (SSE) for GTM, JSON for GA4</td>
+            </tr>
+            <tr>
+                <td><strong>Monorepo Structure</strong></td>
+                <td>pnpm workspace (2 apps + 1 shared package)</td>
+            </tr>
+            <tr>
+                <td><strong>Source Files</strong></td>
+                <td>~30 TypeScript/TSX files</td>
+            </tr>
+            <tr>
+                <td><strong>API Endpoints</strong></td>
+                <td>16 routes across auth, sessions, chat, GA4</td>
+            </tr>
+            <tr>
+                <td><strong>DB Tables</strong></td>
+                <td>6 (users, auth_tokens, invite_keys, sessions, messages, ga4_oauth_tokens)</td>
+            </tr>
+            <tr>
+                <td><strong>Frontend Apps</strong></td>
+                <td>2 (GTM Mode + GA4 Mode)</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <!-- Mermaid rendering library -->
+    <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+    <script>
+        mermaid.initialize({ startOnLoad: true });
+    </script>
+</body>
+
+</html>

@@ -1,0 +1,203 @@
+@import "tailwindcss";
+@source ".";
+@source "../../../apps/gtm/src";
+@source "../../../apps/ga4/src";
+@theme {
+  --color-primary-ga4: #e8710a;
+  --color-primary-gtm: #1a3a5c;
+  --color-bg-main: #f0f4f8;
+  --color-bg-card: #ffffff;
+  --color-border-light: #dce4ec;
+}
+
+@layer base {
+  html {
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Custom Scrollbar */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 10px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: #94a3b8;
+  }
+
+  :focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px white, 0 0 0 4px rgba(232, 113, 10, 0.5);
+  }
+}
+
+@utility glass {
+  backdrop-blur: 12px;
+  background-color: rgba(255, 255, 255, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+@utility animate-fade-in {
+  animation: fade-in 0.2s ease-out forwards;
+}
+
+@utility animate-slide-in {
+  animation: slide-in 0.3s ease-out forwards;
+}
+
+@utility animate-zoom-in {
+  animation: zoom-in 0.2s cubic-bezier(0, 0, 0.2, 1) forwards;
+}
+
+/* Shadcn-like animation utilities for Tailwind 4 */
+@utility animate-in {
+  animation-duration: 500ms;
+  animation-fill-mode: forwards;
+  animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@utility fade-in {
+  --tw-enter-opacity: 0;
+  animation-name: enter-fade;
+}
+
+@utility slide-in-from-bottom-2 {
+  --tw-enter-translate-y: 0.5rem;
+  animation-name: enter-slide-y;
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes enter-fade {
+  from { opacity: var(--tw-enter-opacity, 0); }
+}
+
+@keyframes enter-slide-y {
+  from { transform: translateY(var(--tw-enter-translate-y, 0)); }
+}
+
+@keyframes slide-in-from-top {
+  from { transform: translateY(-0.5rem); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+@keyframes zoom-in {
+  from { transform: scale(0.95); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+
+@keyframes slide-in {
+  from { transform: translateY(-1rem); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+/* Premium Table Styles */
+.prose table {
+  width: 100%;
+  border-separate: true;
+  border-spacing: 0;
+  overflow: hidden;
+  border-radius: 0.75rem;
+  border: 1px solid #f3f4f6;
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  background-color: white;
+}
+
+.prose thead {
+  background-color: rgba(249, 250, 251, 0.8);
+}
+
+.prose th {
+  padding: 0.75rem 1rem;
+  text-align: left;
+  font-size: 0.625rem;
+  font-weight: 700;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.prose td {
+  padding: 0.75rem 1rem;
+  font-size: 0.875rem;
+  color: #4b5563;
+  border-bottom: 1px solid #f9fafb;
+  transition-property: color, background-color, border-color, text-decoration-color, fill, stroke;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  transition-duration: 150ms;
+}
+
+.prose tr:last-child td {
+  border-bottom-width: 0px;
+}
+
+.prose tr:hover td {
+  background-color: rgba(249, 250, 251, 0.5);
+}
+
+/* Custom selection */
+::selection {
+  background-color: #ffedd5;
+  color: #7c2d12;
+}
+
+/* Severity Indicators */
+.severity-card {
+  @apply rounded-xl px-4 py-2 my-4 border-l-4 font-semibold text-sm flex items-center gap-2 shadow-sm;
+}
+
+.severity-critical {
+  @apply bg-red-50 border-red-500 text-red-800;
+  background: linear-gradient(to right, rgba(254, 226, 226, 0.9), rgba(254, 242, 242, 0.5));
+}
+
+.severity-high {
+  @apply bg-orange-50 border-orange-500 text-orange-800;
+  background: linear-gradient(to right, rgba(255, 237, 213, 0.9), rgba(255, 247, 237, 0.5));
+}
+
+.severity-medium {
+  @apply bg-yellow-50 border-yellow-500 text-yellow-800;
+  background: linear-gradient(to right, rgba(254, 249, 195, 0.9), rgba(254, 252, 232, 0.5));
+}
+
+.severity-low {
+  @apply bg-blue-50 border-blue-500 text-blue-800;
+  background: linear-gradient(to right, rgba(219, 234, 254, 0.9), rgba(239, 246, 255, 0.5));
+}
+
+/* Prose refinements */
+.prose h3 {
+  @apply mt-8 mb-4 flex items-center gap-2;
+}
+
+.prose p {
+  @apply my-3;
+}
+
+.prose li {
+  @apply my-1;
+}
+
+.prose strong {
+  @apply font-bold text-gray-900;
+}
+
+.prose code {
+  @apply bg-gray-100 px-1.5 py-0.5 rounded text-[0.8em] font-mono text-gray-800 border border-gray-200;
+}

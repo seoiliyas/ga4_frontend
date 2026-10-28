@@ -14,7 +14,7 @@ COPY frontend ./frontend
 
 # Public URL of the backend Cloud Run service (baked in at build time by Vite).
 # Leave empty if you reverse-proxy /api to the backend on the same origin.
-ARG VITE_WORKER_URL=""
+ARG VITE_WORKER_URL="https://ga4-backend-851163817737.us-south1.run.app"
 ENV VITE_WORKER_URL=${VITE_WORKER_URL}
 RUN pnpm build:ga4
 

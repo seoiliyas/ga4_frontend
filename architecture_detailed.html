@@ -285,65 +285,66 @@
     <div class="container">
         <header>
             <h1>BrightHorizon AI Architecture</h1>
-            <p>A deep dive into the components, data flows, and infrastructure powering the GTM & GA4 Auditor.</p>
+            <p>A deep dive into the shared monorepo, dual edge/Cloud Run API runtime, storage layers, and AI pipelines powering the GTM &amp; GA4 Auditor.</p>
         </header>
 
         <!-- 1. High-Level System Architecture -->
         <section id="high-level">
             <div class="section-header">
                 <h2>High-Level System Architecture</h2>
-                <p>The global overview of how the frontend, backend, and external services interact.</p>
+                <p>Global overview of the dual-app frontend, dual-runtime API layer (Cloudflare Workers &amp; GCP Cloud Run), storage backends, and Vertex AI integration.</p>
             </div>
             <div class="graph-container">
                 <pre class="mermaid">
 graph TB
-    subgraph Client["🖥️ Frontend — Vite + React (pnpm monorepo)"]
+    subgraph Client["Frontend — React 19 + Vite 6 + Tailwind v4"]
         Browser["Browser (SPA)"]
         GTMApp["GTM App (:5173)"]
         GA4App["GA4 App (:5174)"]
     end
 
-    subgraph CloudflarePages["☁️ Cloudflare Pages"]
+    subgraph CloudflarePages["Static Hosting (Cloudflare Pages)"]
         StaticGTM["brighthorizon-gtm.pages.dev"]
         StaticGA4["brighthorizon-ga4.pages.dev"]
     end
 
-    subgraph CloudflareWorker["⚡ Cloudflare Worker (single API)"]
-        Worker["worker/index.ts"]
-        AuthRoutes["Auth Routes"]
-        SessionRoutes["Session Routes"]
-        ChatRoutes["Chat Route - chatMode gtm or ga4"]
-        GA4OAuthRoutes["GA4 OAuth Routes"]
+    subgraph DualBackend["Unified API Layer (Shared worker/ Handlers)"]
+        Worker["worker/index.ts (CF Worker)"]
+        CloudRun["server/src/index.ts (Cloud Run Hono)"]
+        CoreRoutes["Auth · Sessions · Chat · Files · Models · GA4 OAuth"]
     end
 
-    subgraph CloudflareStorage["🗄️ Cloudflare Storage"]
-        D1["D1: gtm_chat_history"]
-        KV["KV: GTM_CONTAINER"]
+    subgraph Storage["Storage Layer (Workers D1/KV/R2 or GCP Postgres/GCS)"]
+        SqlDb["D1 / Cloud SQL Postgres (7 tables)"]
+        KvStore["KV / GCS Container Bucket"]
+        BlobStore["R2 / GCS Files Bucket"]
     end
 
-    subgraph External["🌐 External APIs"]
-        Gemini["Google Gemini API (gemini-3.1-pro-preview)"]
-        GA4Data["GA4 Data API"]
-        GA4Admin["GA4 Admin API"]
-        QuickChart["QuickChart.io (Chart rendering)"]
+    subgraph External["External &amp; Google Cloud APIs"]
+        Gemini["Vertex AI Gemini (2.5 Flash / Pro)"]
+        GA4APIs["GA4 Data &amp; Admin APIs"]
+        QuickChart["QuickChart.io (Chart.js v4)"]
     end
 
     Browser -->|"Served from"| StaticGTM
     Browser -->|"Served from"| StaticGA4
-    Browser -->|"REST + SSE"| Worker
-    Worker -->|"SQL Queries"| D1
-    Worker -->|"Cache Read/Write"| KV
-    Worker -->|"Context Cache + Streaming"| Gemini
-    Worker -->|"Function Calling"| GA4Data
-    Worker -->|"Function Calling"| GA4Admin
-    Worker -->|"Chart images"| QuickChart
+    Browser -->|"REST + SSE (Bearer Auth)"| Worker
+    Browser -->|"REST + SSE (Bearer Auth)"| CloudRun
+    Worker --> CoreRoutes
+    CloudRun --> CoreRoutes
+    CoreRoutes -->|"SQL + INT8/D1 API"| SqlDb
+    CoreRoutes -->|"GTM JSON + Context Cache Keys"| KvStore
+    CoreRoutes -->|"Attachments + Private Charts"| BlobStore
+    CoreRoutes -->|"Context Cache + Stream / Tool Loop"| Gemini
+    CoreRoutes -->|"Parallel Function Calling"| GA4APIs
+    CoreRoutes -->|"POST /chart -> PNG -> R2/GCS"| QuickChart
     GTMApp -.->|"local dev proxy"| Worker
     GA4App -.->|"local dev proxy"| Worker
 
     style Client fill:#e8f0fe,stroke:#0969da,color:#1f2328
     style CloudflarePages fill:#fff8e1,stroke:#d29922,color:#1f2328
-    style CloudflareWorker fill:#f3e8ff,stroke:#8250df,color:#1f2328
-    style CloudflareStorage fill:#dcfce7,stroke:#1a7f37,color:#1f2328
+    style DualBackend fill:#f3e8ff,stroke:#8250df,color:#1f2328
+    style Storage fill:#dcfce7,stroke:#1a7f37,color:#1f2328
     style External fill:#ffe0e0,stroke:#f85149,color:#1f2328
                 </pre>
             </div>
@@ -354,31 +355,37 @@ graph TB
                         <div class="step-item" id="high-level-step-1">
                             <div class="step-number">1</div>
                             <div class="step-content">
-                                <strong>Static Asset Delivery:</strong> The user's browser loads the React SPA from Cloudflare Pages — either <code>brighthorizon-gtm.pages.dev</code> (GTM mode, port 5173 in dev) or <code>brighthorizon-ga4.pages.dev</code> (GA4 mode, port 5174). No server-side rendering; the app boots entirely client-side.
+                                <strong>Dual-App Client Delivery:</strong> Two Vite React 19 SPAs — <code>@brighthorizon/gtm</code> (<code>:5173</code>) and <code>@brighthorizon/ga4</code> (<code>:5174</code>) — deploy to Cloudflare Pages and share UI, auth, and API clients from <code>@brighthorizon/shared</code>.
                             </div>
                         </div>
                         <div class="step-item" id="high-level-step-2">
                             <div class="step-number">2</div>
                             <div class="step-content">
-                                <strong>Edge Routing via Worker:</strong> All API traffic (REST + SSE) is directed to the single Cloudflare Worker (<code>worker/index.ts</code>). It handles Auth, Sessions, Chat, and GA4 OAuth routes. In local dev, Vite proxies these requests to Wrangler Dev on port 8787.
+                                <strong>Portable API Runtime:</strong> All Web-standard route handlers live in <code>worker/</code> and run identically on either Cloudflare Workers (<code>worker/index.ts</code> + daily Cron) or GCP Cloud Run via Node 22 + Hono (<code>server/src/index.ts</code>).
                             </div>
                         </div>
                         <div class="step-item" id="high-level-step-3">
                             <div class="step-number">3</div>
                             <div class="step-content">
-                                <strong>Storage Layer:</strong> The Worker reads and writes to two Cloudflare storage primitives — D1 (<code>gtm_chat_history</code>) for relational data (users, sessions, messages) and KV (<code>GTM_CONTAINER</code>) for fast cache reads of large GTM container JSON blobs.
+                                <strong>Abstracted Storage Primitives:</strong> Workers use native D1, KV, and R2 bindings, while Cloud Run shims (<code>db.ts</code>, <code>kv.ts</code>, <code>r2.ts</code>) adapt Cloud SQL Postgres and Google Cloud Storage buckets behind the exact same D1/KV/R2 interfaces.
                             </div>
                         </div>
                         <div class="step-item" id="high-level-step-4">
                             <div class="step-number">4</div>
                             <div class="step-content">
-                                <strong>AI Interaction via Gemini:</strong> The Worker forwards the user prompt + chat history to Google Gemini using context caching for large GTM payloads (cache stored in KV with 30-minute TTL), then streams the response back via SSE (GTM mode) or returns JSON (GA4 mode).
+                                <strong>Vertex AI Gemini &amp; Context Caching:</strong> Powered by <code>@google/genai</code> (default <code>gemini-2.5-flash</code>, plus dynamic model discovery via <code>GET /api/models</code>). GTM mode caches the minified container in KV/GCS keyed by <code>model + sha256(container)</code> (1-hour TTL) and streams over SSE.
                             </div>
                         </div>
                         <div class="step-item" id="high-level-step-5">
                             <div class="step-number">5</div>
                             <div class="step-content">
-                                <strong>GA4 Function Calling:</strong> In GA4 mode, Gemini issues up to 20 function-call turns. The Worker intercepts each call, executes it against the GA4 Data API or GA4 Admin API, and optionally renders charts via QuickChart.io before returning results to Gemini for synthesis.
+                                <strong>Parallel GA4 Tool Loop &amp; Private Charting:</strong> In GA4 mode, Gemini issues up to 20 tool turns with parallel execution across 8 declarations (7 GA4 APIs + <code>create_chart</code>). Chart.js v4 PNGs are saved privately to R2/GCS at <code>/api/files/:id</code> and persisted in <code>messages.charts</code>.
+                            </div>
+                        </div>
+                        <div class="step-item" id="high-level-step-6">
+                            <div class="step-number">6</div>
+                            <div class="step-content">
+                                <strong>Multimodal Files &amp; Hardened Security:</strong> Supports image, PDF, text/CSV, and zero-dependency OOXML (<code>.docx</code>/<code>.xlsx</code>) attachments viewed via authenticated Blob URLs, protected by Bearer-only auth, PBKDF2, AES-GCM, HMAC OAuth state, rate limiting, and origin-allowlisted CORS.
                             </div>
                         </div>
                     </div>
@@ -391,8 +398,8 @@ graph TB
         <!-- 2. Frontend Component Tree -->
         <section id="frontend">
             <div class="section-header">
-                <h2>Frontend Structure & Components</h2>
-                <p>How the monorepo is structured and how components are reused across applications.</p>
+                <h2>Frontend Structure &amp; Components</h2>
+                <p>Thin app entrypoints backed by a single deduplicated <code>@brighthorizon/shared</code> workspace package.</p>
             </div>
 
             <h3>Component Tree (pnpm Monorepo)</h3>
@@ -400,54 +407,54 @@ graph TB
                 <pre class="mermaid">
 graph TD
     subgraph GTMApp["frontend/apps/gtm/src/"]
-        GTMMain["main.tsx"]
-        GTMAppNode["App.tsx"]
-        GTMAuthPage["AuthPage.tsx"]
+        GTMMain["gtm/src/main.tsx"]
+        GTMAppNode["gtm/src/App.tsx"]
     end
 
     subgraph GA4App["frontend/apps/ga4/src/"]
-        GA4Main["main.tsx"]
-        GA4AppNode["App.tsx"]
-        GA4AuthPage["AuthPage.tsx"]
+        GA4Main["ga4/src/main.tsx"]
+        GA4AppNode["ga4/src/App.tsx"]
     end
 
     subgraph Shared["frontend/packages/shared/src/"]
-        AuthProvider["context/AuthContext.tsx (AuthProvider)"]
-        AuthContext["useAuth hook"]
-        Dashboard["components/Dashboard.tsx"]
+        AppShell["components/AppShell.tsx"]
+        AuthPage["components/AuthPage.tsx"]
+        AuthProvider["context/AuthContext.tsx"]
+        Toast["components/Toast.tsx"]
+        ModelSelector["components/ModelSelector.tsx"]
         Sidebar["components/Sidebar.tsx"]
+        Dashboard["components/Dashboard.tsx"]
+        AuthMedia["components/AuthMedia.tsx"]
         ChatOutline["components/ChatOutline.tsx"]
         Ga4Settings["components/Ga4Settings.tsx"]
         InviteKeyPanel["components/InviteKeyPanel.tsx"]
-        Toast["components/Toast.tsx (ToastProvider)"]
-        AuthApi["services/authApi.ts (createAuthApi)"]
-        ChatApi["services/chatApi.ts (createChatApi)"]
+        AuthApi["services/authApi.ts"]
+        ChatApi["services/chatApi.ts"]
         CleanJson["utils/clean-json.ts"]
         GtmMinifier["utils/gtm-minifier.ts"]
     end
 
     GTMMain --> GTMAppNode
-    GTMAppNode --> GTMAuthPage
-    GTMAuthPage --> AuthContext
-
     GA4Main --> GA4AppNode
-    GA4AppNode --> GA4AuthPage
-    GA4AuthPage --> AuthContext
+    GTMAppNode --> AppShell
+    GA4AppNode --> AppShell
 
-    GTMAppNode --> AuthProvider
-    GA4AppNode --> AuthProvider
+    AppShell --> AuthProvider
+    AppShell --> Toast
+    AppShell --> AuthPage
+    AppShell --> ModelSelector
+    AppShell --> Sidebar
+    AppShell --> Dashboard
 
-    GTMAppNode --> Sidebar
-    GTMAppNode --> Dashboard
-    GA4AppNode --> Sidebar
-    GA4AppNode --> Dashboard
-
-    AuthProvider --> AuthContext
+    AuthPage --> AuthProvider
     AuthProvider --> AuthApi
+    ModelSelector --> ChatApi
     Sidebar --> ChatApi
-    Dashboard --> ChatApi
-    Sidebar --> ChatOutline
     Sidebar --> InviteKeyPanel
+    InviteKeyPanel --> AuthApi
+    Dashboard --> ChatApi
+    Dashboard --> AuthMedia
+    Dashboard --> ChatOutline
     Dashboard --> Ga4Settings
 
     style GTMApp fill:#e8f0fe,stroke:#0969da
@@ -455,44 +462,44 @@ graph TD
     style Shared fill:#f3e8ff,stroke:#8250df
                 </pre>
             </div>
-            
+
             <div class="explanation-grid">
                 <div class="component-card">
                     <div class="step-list">
                         <div class="step-item" id="frontend-components-step-1">
                             <div class="step-number">1</div>
                             <div class="step-content">
-                                <strong>App Bootstrap:</strong> <code>main.tsx</code> is the Vite entry point. It mounts the root React tree and sets environment-specific flags (API base URL, app mode identifier) that flow down through the component tree.
+                                <strong>Thin App Entrypoints:</strong> <code>gtm/src/App.tsx</code> and <code>ga4/src/App.tsx</code> instantiate mode-scoped <code>createAuthApi</code> and <code>createChatApi</code> clients and render <code>&lt;AppShell mode="gtm|ga4" /&gt;</code> — eliminating duplicated app code.
                             </div>
                         </div>
                         <div class="step-item" id="frontend-components-step-2">
                             <div class="step-number">2</div>
                             <div class="step-content">
-                                <strong>Context Wrapping:</strong> <code>App.tsx</code> wraps the entire subtree in <code>AuthProvider</code> (from the shared package), which exposes the <code>useAuth</code> hook. It also wraps in <code>ToastProvider</code> for global notifications. Both apps (GTM and GA4) do this identically.
+                                <strong>Shared App Shell &amp; Contexts:</strong> <code>AppShell.tsx</code> wraps the tree in <code>AuthProvider</code> and <code>ToastProvider</code>, gates unauthenticated users to the unified themed <code>AuthPage.tsx</code>, and coordinates sessions and <code>ModelSelector.tsx</code>.
                             </div>
                         </div>
                         <div class="step-item" id="frontend-components-step-3">
                             <div class="step-number">3</div>
                             <div class="step-content">
-                                <strong>Auth Gate:</strong> <code>App.tsx</code> conditionally renders <code>AuthPage.tsx</code> (login/signup) when the user is unauthenticated, or the main layout (Sidebar + Dashboard) when authenticated. The decision is driven by <code>isAuthenticated</code> from <code>useAuth</code>.
+                                <strong>Chat Workspace &amp; Markdown:</strong> <code>Dashboard.tsx</code> renders streaming Markdown (<code>@tailwindcss/typography</code> + <code>react-markdown</code>), severity cards, copyable tables, auto-resizing <code>&lt;textarea&gt;</code>, <strong>Stop</strong> abort controls, drag-and-drop uploads, and <code>ChatOutline.tsx</code>.
                             </div>
                         </div>
                         <div class="step-item" id="frontend-components-step-4">
                             <div class="step-number">4</div>
                             <div class="step-content">
-                                <strong>Shared UI Composition:</strong> The <code>@brighthorizon/shared</code> package supplies <code>Dashboard</code>, <code>Sidebar</code>, <code>ChatOutline</code>, <code>Ga4Settings</code>, and <code>InviteKeyPanel</code>. Both GTM and GA4 apps import these — app-specific differences are controlled via mode props, not code duplication.
+                                <strong>Authenticated Media Rendering:</strong> <code>AuthMedia.tsx</code> (<code>AuthImage</code> &amp; <code>openAuthenticatedFile</code>) fetches private <code>/api/files/:id</code> attachments and GA4 charts using Bearer headers and manages Blob object URL lifecycles.
                             </div>
                         </div>
                         <div class="step-item" id="frontend-components-step-5">
                             <div class="step-number">5</div>
                             <div class="step-content">
-                                <strong>Service Integration:</strong> <code>AuthProvider</code> instantiates <code>createAuthApi()</code> and <code>Sidebar</code>/<code>Dashboard</code> each instantiate <code>createChatApi()</code>. Factory functions inject the correct base URL and app header so every <code>fetch</code> call carries the right context automatically.
+                                <strong>Navigation, Invites &amp; GA4 Config:</strong> <code>Sidebar.tsx</code> groups sessions by date, exposes <code>InviteKeyPanel.tsx</code>, and <code>Ga4Settings.tsx</code> handles popup Google OAuth + GA4 property binding.
                             </div>
                         </div>
                         <div class="step-item" id="frontend-components-step-6">
                             <div class="step-number">6</div>
                             <div class="step-content">
-                                <strong>Utility Helpers:</strong> <code>clean-json.ts</code> sanitizes AI responses before rendering, and <code>gtm-minifier.ts</code> compresses large GTM container JSON before uploading to the Worker, keeping payloads within limits.
+                                <strong>Container Utilities:</strong> Used by <code>get-minified.ts</code>, <code>clean-json.ts</code> strips control characters from raw GTM exports, and <code>gtm-minifier.ts</code> shrinks the container while preserving all trigger condition operators, <code>negate</code> rules, and variable/template names.
                             </div>
                         </div>
                     </div>
@@ -503,7 +510,7 @@ graph TD
             <div class="graph-container" id="frontend-services-diagram">
                 <pre class="mermaid">
 graph LR
-    subgraph Services["src/services/"]
+    subgraph Services["frontend/packages/shared/src/services/"]
         authApi["authApi.ts"]
         chatApi["chatApi.ts"]
     end
@@ -524,11 +531,11 @@ graph LR
         renameSession["renameSession()"]
         deleteSession["deleteSession()"]
         getMessages["getMessages()"]
-        sendStream["sendMessageStream() (GTM SSE + GA4 JSON)"]
-        setSessionGa4Property["setSessionGa4Property()"]
-        getGa4OAuthStatus["getGa4OAuthStatus()"]
-        disconnectGa4OAuth["disconnectGa4OAuth()"]
-        getGa4Properties["getGa4Properties()"]
+        sendStream["sendMessageStream() (SSE + JSON + AbortSignal)"]
+        getModels["getModels()"]
+        fileMethods["uploadFiles() · fetchFileBlob() · deleteFile()"]
+        ga4OAuth["getGa4OAuthUrl() · status · disconnect"]
+        ga4Props["getGa4Properties() · setSessionGa4Property()"]
     end
 
     authApi --> bootstrap
@@ -545,10 +552,10 @@ graph LR
     chatApi --> deleteSession
     chatApi --> getMessages
     chatApi --> sendStream
-    chatApi --> setSessionGa4Property
-    chatApi --> getGa4OAuthStatus
-    chatApi --> disconnectGa4OAuth
-    chatApi --> getGa4Properties
+    chatApi --> getModels
+    chatApi --> fileMethods
+    chatApi --> ga4OAuth
+    chatApi --> ga4Props
 
     style authApi fill:#ffe0e0,stroke:#f85149
     style chatApi fill:#f3e8ff,stroke:#8250df
@@ -561,31 +568,37 @@ graph LR
                         <div class="step-item" id="frontend-services-step-1">
                             <div class="step-number">1</div>
                             <div class="step-content">
-                                <strong>Factory Creation:</strong> Both <code>createAuthApi(baseUrl)</code> and <code>createChatApi(baseUrl, appMode)</code> are called once at provider/component mount. The factory closes over the base URL and app identifier, so callers never need to manage headers manually.
+                                <strong>App-Scoped Factories:</strong> <code>createAuthApi(app)</code> and <code>createChatApi(app, getToken)</code> inject <code>X-BrightHorizon-App</code> and <code>Authorization: Bearer</code> headers automatically across all endpoints.
                             </div>
                         </div>
                         <div class="step-item" id="frontend-services-step-2">
                             <div class="step-number">2</div>
                             <div class="step-content">
-                                <strong>Auth API Methods:</strong> Exposes <code>bootstrap()</code>, <code>signup()</code>, <code>login()</code>, <code>logout()</code>, <code>getMe()</code>, <code>generateInviteKey()</code>, and <code>getInviteKeys()</code> — covering the full identity lifecycle from initial setup to team management.
+                                <strong>Auth Lifecycle:</strong> <code>authApi.ts</code> handles bootstrap, invite-key signup, login, logout, token verification (<code>getMe</code>), and invite key creation/listing.
                             </div>
                         </div>
                         <div class="step-item" id="frontend-services-step-3">
                             <div class="step-number">3</div>
                             <div class="step-content">
-                                <strong>Chat API — Session Management:</strong> <code>getSessions()</code>, <code>createSession()</code>, <code>renameSession()</code>, and <code>deleteSession()</code> map 1:1 to the protected CRUD routes on the Worker, enabling the sidebar to manage chat threads.
+                                <strong>Sessions &amp; Model Discovery:</strong> Full session CRUD plus <code>getModels()</code> to populate <code>ModelSelector</code> from Vertex AI.
                             </div>
                         </div>
                         <div class="step-item" id="frontend-services-step-4">
                             <div class="step-number">4</div>
                             <div class="step-content">
-                                <strong>SSE Stream Handling:</strong> <code>sendMessageStream()</code> opens a persistent POST connection and reads a <code>ReadableStream</code>. Each <code>data: {"text":"..."}</code> chunk is decoded and forwarded to the Dashboard via an <code>onChunk</code> callback, enabling real-time token-by-token rendering for GTM mode.
+                                <strong>SSE Stream &amp; Cancellation:</strong> <code>sendMessageStream()</code> reads GTM SSE streams chunk-by-chunk (or GA4 JSON responses) and accepts an <code>AbortSignal</code> for instant cancellation.
                             </div>
                         </div>
                         <div class="step-item" id="frontend-services-step-5">
                             <div class="step-number">5</div>
                             <div class="step-content">
-                                <strong>GA4 OAuth Lifecycle:</strong> <code>getGa4OAuthStatus()</code>, <code>disconnectGa4OAuth()</code>, <code>getGa4Properties()</code>, and <code>setSessionGa4Property()</code> manage the Google OAuth connection state and allow users to select which GA4 property to query within a session.
+                                <strong>Authenticated Files &amp; Media:</strong> <code>uploadFiles()</code> sends multipart uploads, <code>fetchFileBlob()</code> retrieves protected images/charts with Bearer headers, and <code>deleteFile()</code> removes draft attachments.
+                            </div>
+                        </div>
+                        <div class="step-item" id="frontend-services-step-6">
+                            <div class="step-number">6</div>
+                            <div class="step-content">
+                                <strong>Secure GA4 OAuth &amp; Properties:</strong> <code>getGa4OAuthUrl()</code> fetches a signed OAuth URL over Bearer auth (no tokens in popup query strings), alongside status, disconnect, property listing, and property binding.
                             </div>
                         </div>
                     </div>
@@ -598,16 +611,16 @@ graph LR
         <!-- 3. Backend API Route Map -->
         <section id="backend">
             <div class="section-header">
-                <h2>Backend API & Routing</h2>
-                <p>The internal routing and protection mechanisms of the Cloudflare Worker.</p>
+                <h2>Backend API &amp; Routing</h2>
+                <p>24 <code>/api/*</code> routes across 6 domain routers plus Cloud Run <code>/healthz</code> and Worker Cron cleanup.</p>
             </div>
             <div class="graph-container" id="backend-diagram">
                 <pre class="mermaid">
 graph TD
-    Entry["Worker fetch handler"]
-    CORS["CORS Preflight (OPTIONS)"]
+    Entry["worker/index.ts OR server/src/index.ts"]
+    CORS["Origin-Allowlisted CORS + Rate Limiter"]
 
-    subgraph AuthRoutes["🔓 Auth Routes (No token required)"]
+    subgraph AuthRoutes["Auth Routes (/api/auth/*)"]
         bootstrap["/api/auth/bootstrap — POST"]
         signup["/api/auth/signup — POST"]
         login["/api/auth/login — POST"]
@@ -617,34 +630,36 @@ graph TD
         inviteKeys["/api/auth/invite-keys — GET 🔒"]
     end
 
-    subgraph ProtectedRoutes["🔒 Protected Routes (Bearer token)"]
-        listSessions["GET /api/sessions"]
-        createSession["POST /api/sessions"]
-        renameSession["PATCH /api/sessions/:id"]
-        deleteSession["DELETE /api/sessions/:id"]
-        getMessages["GET /api/sessions/:id/messages"]
-        setGa4Property["PUT /api/sessions/:id/property"]
-        chat["POST /api/chat - chatMode gtm or ga4"]
+    subgraph ProtectedRoutes["Protected Core Routes (Bearer Token)"]
+        sessionsCrud["GET/POST /api/sessions · PATCH/DELETE /api/sessions/:id"]
+        sessionMessages["GET /api/sessions/:id/messages · PUT /property"]
+        chat["POST /api/chat (gtm SSE | ga4 JSON)"]
+        models["GET /api/models (30m cached)"]
+        files["POST /api/files/upload · GET/DELETE /api/files/:id"]
     end
 
-    subgraph GA4Routes["🔧 GA4 OAuth + Property Routes"]
-        ga4OAuthAuthorize["/api/ga4/oauth/authorize — GET"]
-        ga4OAuthCallback["/api/ga4/oauth/callback — GET"]
-        ga4OAuthStatus["/api/ga4/oauth/status — GET 🔒"]
-        ga4OAuthDisconnect["/api/ga4/oauth/disconnect — POST 🔒"]
-        ga4Properties["/api/ga4/properties — GET 🔒"]
+    subgraph GA4Routes["GA4 OAuth &amp; Property Routes"]
+        ga4OAuthAuthorize["GET /api/ga4/oauth/authorize 🔒"]
+        ga4OAuthCallback["GET /api/ga4/oauth/callback (HMAC state)"]
+        ga4OAuthStatus["GET /api/ga4/oauth/status 🔒"]
+        ga4OAuthDisconnect["POST /api/ga4/oauth/disconnect 🔒"]
+        ga4Properties["GET /api/ga4/properties 🔒"]
     end
+
+    Maintenance["Worker scheduled() Cron · Cloud Run /healthz"]
 
     Entry --> CORS
-    Entry --> AuthRoutes
-    Entry --> ProtectedRoutes
-    Entry --> GA4Routes
-    ProtectedRoutes -->|"authenticate()"| D1Check["D1: auth_tokens + users"]
+    CORS --> AuthRoutes
+    CORS --> ProtectedRoutes
+    CORS --> GA4Routes
+    Entry --> Maintenance
+    ProtectedRoutes -->|"authenticate()"| AuthWall["DB: auth_tokens JOIN users"]
 
     style Entry fill:#fff8e1,stroke:#d29922
     style AuthRoutes fill:#ffe0e0,stroke:#f85149
     style ProtectedRoutes fill:#f3e8ff,stroke:#8250df
     style GA4Routes fill:#dcfce7,stroke:#1a7f37
+    style Maintenance fill:#e8f0fe,stroke:#0969da
                 </pre>
             </div>
 
@@ -654,37 +669,37 @@ graph TD
                         <div class="step-item" id="backend-step-1">
                             <div class="step-number">1</div>
                             <div class="step-content">
-                                <strong>Unified Entry + CORS:</strong> Every request enters through the Worker's <code>fetch</code> handler in <code>index.ts</code>. CORS preflight (<code>OPTIONS</code>) is handled globally first, ensuring cross-origin requests from Cloudflare Pages succeed.
+                                <strong>Dual Entrypoints:</strong> Requests enter either Cloudflare Worker <code>fetch()</code> (<code>worker/index.ts</code>) or Hono on Node 22 (<code>server/src/index.ts</code>), both dispatching to identical route modules in <code>worker/routes/</code>.
                             </div>
                         </div>
                         <div class="step-item" id="backend-step-2">
                             <div class="step-number">2</div>
                             <div class="step-content">
-                                <strong>Open Auth Routes:</strong> <code>/api/auth/bootstrap</code>, <code>/api/auth/signup</code>, and <code>/api/auth/login</code> require no Bearer token — they are public. However, <code>/api/auth/me</code>, <code>/api/auth/invite</code>, and <code>/api/auth/invite-keys</code> are internally guarded by the auth middleware.
+                                <strong>CORS &amp; Rate Limiting:</strong> Origin-aware CORS honors <code>ALLOWED_ORIGINS</code> uniformly across all status codes and streams; <code>checkRateLimit()</code> protects auth routes (20 req/min/IP) and chat (30 req/min/user).
                             </div>
                         </div>
                         <div class="step-item" id="backend-step-3">
                             <div class="step-number">3</div>
                             <div class="step-content">
-                                <strong>Protected Route Guard:</strong> All session and chat routes require a valid Bearer token. The <code>authenticate()</code> middleware JOINs <code>auth_tokens</code> and <code>users</code> in D1, rejects expired tokens, and attaches the user object to the request context before routing continues.
+                                <strong>Auth &amp; Atomic Invites:</strong> <code>routes/auth.ts</code> validates app-scoped credentials via PBKDF2 + <code>timingSafeEqual</code> and redeems invite keys atomically in <code>db.batch()</code> with conflict detection on both SQLite and Postgres (<code>23505</code>).
                             </div>
                         </div>
                         <div class="step-item" id="backend-step-4">
                             <div class="step-number">4</div>
                             <div class="step-content">
-                                <strong>Chat Mode Dispatch:</strong> <code>POST /api/chat</code> reads <code>chatMode</code> from the body (<code>'gtm'</code> or <code>'ga4'</code>) and delegates to either <code>gtm-chat.ts</code> (SSE streaming) or <code>ga4/chat.ts</code> (function-calling JSON). Both share the same route but diverge completely in implementation.
+                                <strong>Bearer Auth Wall:</strong> <code>authenticate()</code> accepts <code>Authorization: Bearer</code> headers only (no URL query tokens) and verifies non-expired tokens in <code>auth_tokens JOIN users</code>.
                             </div>
                         </div>
                         <div class="step-item" id="backend-step-5">
                             <div class="step-number">5</div>
                             <div class="step-content">
-                                <strong>GA4 OAuth Redirect Flow:</strong> <code>/api/ga4/oauth/authorize</code> redirects users to Google's consent screen. Google sends them back to <code>/api/ga4/oauth/callback</code>, where the Worker exchanges the authorization code for tokens and stores them in <code>ga4_oauth_tokens</code> in D1.
+                                <strong>Sessions, Chat, Models &amp; Files:</strong> Handles session CRUD with storage cleanup on delete, GTM/GA4 Gemini chat, 30-min cached model listing, and sandboxed file uploads/downloads (<code>Cache-Control: private</code>, <code>nosniff</code>, CSP <code>sandbox</code>).
                             </div>
                         </div>
                         <div class="step-item" id="backend-step-6">
                             <div class="step-number">6</div>
                             <div class="step-content">
-                                <strong>App Context Inference:</strong> When OAuth callbacks arrive (no app header), the Worker infers the intended app from the request URL or state parameter, ensuring tokens are associated with the correct user and app mode.
+                                <strong>Signed GA4 OAuth &amp; Maintenance:</strong> Verifies HMAC-SHA256 OAuth <code>state</code> (10-min TTL) on callback, paginates <code>accountSummaries</code>, exposes <code>/healthz</code> on Cloud Run, and purges expired tokens via daily Cron trigger.
                             </div>
                         </div>
                     </div>
@@ -697,8 +712,8 @@ graph TD
         <!-- 4. Database Schema -->
         <section id="database">
             <div class="section-header">
-                <h2>Database Schema (D1 / SQLite)</h2>
-                <p>The relational structure for user data, session persistence, and OAuth tokens.</p>
+                <h2>Database Schema (7 Tables — D1 SQLite &amp; Cloud SQL Postgres)</h2>
+                <p>Unified relational model defined in <code>schema.sql</code> and <code>schema-postgres.sql</code>.</p>
             </div>
             <div class="graph-container" id="database-diagram">
                 <pre class="mermaid">
@@ -745,6 +760,7 @@ erDiagram
         TEXT role
         TEXT text
         TEXT charts
+        TEXT attachments
         INTEGER created_at
     }
 
@@ -759,52 +775,73 @@ erDiagram
         INTEGER updated_at
     }
 
+    attachments {
+        TEXT id PK
+        TEXT session_id FK
+        INTEGER message_id FK
+        TEXT user_id FK
+        TEXT filename
+        TEXT mime_type
+        INTEGER size
+        TEXT r2_key
+        INTEGER created_at
+    }
+
     users ||--o{ auth_tokens : "has"
     users ||--o{ invite_keys : "created_by"
     users ||--o{ invite_keys : "used_by"
     users ||--o{ sessions : "owns"
     users ||--o{ ga4_oauth_tokens : "connects"
+    users ||--o{ attachments : "uploads"
     sessions ||--o{ messages : "contains (CASCADE)"
+    sessions ||--o{ attachments : "scopes (CASCADE)"
+    messages ||--o{ attachments : "links (SET NULL)"
                 </pre>
             </div>
-            
+
             <div class="explanation-grid">
                 <div class="component-card">
                     <div class="step-list">
                         <div class="step-item" id="database-step-1">
                             <div class="step-number">1</div>
                             <div class="step-content">
-                                <strong>User Identity (<code>users</code>):</strong> Stores the canonical user record with a <code>TEXT id</code> (PK), unique <code>username</code> and <code>email</code>, PBKDF2-hashed <code>password</code>, and an <code>app</code> field to scope the user to GTM or GA4 mode.
+                                <strong>User Identity (<code>users</code>):</strong> Composite unique constraints on <code>(username, app)</code> and <code>(email, app)</code> let the same person maintain separate accounts across GTM and GA4 apps, with salted PBKDF2-SHA256 passwords.
                             </div>
                         </div>
                         <div class="step-item" id="database-step-2">
                             <div class="step-number">2</div>
                             <div class="step-content">
-                                <strong>Session Tokens (<code>auth_tokens</code>):</strong> Each login generates a new row with a random <code>token</code> (PK), <code>user_id</code> FK, and an <code>expires_at</code> Unix timestamp 30 days in the future. Multiple tokens per user are supported (multi-device).
+                                <strong>Session Tokens (<code>auth_tokens</code>):</strong> 30-day random Bearer tokens indexed on <code>user_id</code> and <code>expires_at</code> for fast auth and scheduled cleanup.
                             </div>
                         </div>
                         <div class="step-item" id="database-step-3">
                             <div class="step-number">3</div>
                             <div class="step-content">
-                                <strong>Invite System (<code>invite_keys</code>):</strong> One-time-use keys are created by an admin via <code>POST /api/auth/invite</code>. The <code>used_by</code> and <code>used_at</code> columns are populated atomically during signup, preventing replay. Each key is also scoped to an <code>app</code>.
+                                <strong>Invite System (<code>invite_keys</code>):</strong> Single-use <code>INV-...</code> keys with optional app scoping, <code>ON DELETE CASCADE</code> on creator, and <code>ON DELETE SET NULL</code> on redeemer.
                             </div>
                         </div>
                         <div class="step-item" id="database-step-4">
                             <div class="step-number">4</div>
                             <div class="step-content">
-                                <strong>Audit Sessions (<code>sessions</code>):</strong> Represents a conversation thread. Stores a <code>title</code> (auto-generated after the first AI reply), <code>mode</code> (<code>'gtm'</code> or <code>'ga4'</code>), and optionally a <code>ga4_property_id</code> for GA4 sessions.
+                                <strong>Audit Sessions (<code>sessions</code>):</strong> Tracks mode (<code>'gtm'</code> | <code>'ga4'</code>), title, optional numeric <code>ga4_property_id</code>, and BIGINT/INTEGER millisecond timestamps.
                             </div>
                         </div>
                         <div class="step-item" id="database-step-5">
                             <div class="step-number">5</div>
                             <div class="step-content">
-                                <strong>Message History (<code>messages</code>):</strong> Each row stores <code>role</code> (<code>'user'</code> or <code>'model'</code>), full <code>text</code>, and a <code>charts</code> JSON field for any QuickChart URLs embedded in GA4 responses. Cascade-deleted when the parent session is deleted.
+                                <strong>Message History (<code>messages</code>):</strong> Stores ordered conversation turns along with <code>charts</code> JSON (persisted GA4 chart URLs) and <code>attachments</code> JSON (linked file IDs).
                             </div>
                         </div>
                         <div class="step-item" id="database-step-6">
                             <div class="step-number">6</div>
                             <div class="step-content">
-                                <strong>GA4 OAuth Tokens (<code>ga4_oauth_tokens</code>):</strong> Keyed by <code>user_id</code> (one row per user), stores the Google <code>access_token</code>, <code>refresh_token</code>, <code>token_expiry</code>, granted <code>scope</code>, and <code>connected_email</code>. The Worker refreshes the access token automatically when it expires.
+                                <strong>GA4 OAuth Tokens (<code>ga4_oauth_tokens</code>):</strong> Stores AES-GCM encrypted Google <code>access_token</code> and <code>refresh_token</code>, expiry, scopes, and <code>connected_email</code>.
+                            </div>
+                        </div>
+                        <div class="step-item" id="database-step-7">
+                            <div class="step-number">7</div>
+                            <div class="step-content">
+                                <strong>Attachments &amp; Private Charts (<code>attachments</code>):</strong> Indexes every uploaded user file and privately stored GA4 chart PNG with its R2/GCS <code>r2_key</code>, owner, session, and optional message link.
                             </div>
                         </div>
                     </div>
@@ -817,8 +854,8 @@ erDiagram
         <!-- 5. Logic Flows -->
         <section id="flows">
             <div class="section-header">
-                <h2>Logic Flows & Interactions</h2>
-                <p>Step-by-step sequences of the most complex system operations.</p>
+                <h2>Logic Flows &amp; Interactions</h2>
+                <p>End-to-end execution sequences for GTM SSE streaming, GA4 parallel tool calling, and auth/OAuth.</p>
             </div>
 
             <h3>GTM Chat Streaming (SSE)</h3>
@@ -828,45 +865,45 @@ sequenceDiagram
     participant U as User (Browser)
     participant D as Dashboard.tsx
     participant C as chatApi.ts
-    participant W as Worker (CF)
-    participant DB as D1 Database
-    participant KV as KV Store
-    participant G as Gemini API
+    participant R as routes/chat.ts
+    participant S as gemini-chat.ts
+    participant DB as D1 / Postgres
+    participant KV as KV / GCS
+    participant G as Vertex AI Gemini
 
-    U->>D: Types question + clicks Send
-    D->>D: Append user msg to state
-    D->>D: Append empty model msg placeholder
-    D->>C: sendMessageStream(sessionId, question)
-    C->>W: POST /api/chat {sessionId, question, mode: "gtm"}
+    U->>D: Types question / attaches files + clicks Send
+    D->>D: Append user msg + empty model placeholder
+    D->>C: sendMessageStream(sessionId, question, signal)
+    C->>R: POST /api/chat {sessionId, question, chatMode: "gtm", model, attachmentIds}
 
-    W->>DB: Verify session ownership
-    W->>DB: Load message history (SELECT)
-    W->>KV: Check cached Gemini context
+    R->>DB: Verify session ownership + load history + loadAttachments()
+    R->>KV: get("container", cacheTtl: 3600)
+    R->>S: streamGtmChat(...)
+    S->>KV: Check cache key (model + sha256(container))
 
-    alt Cache exists
-        KV-->>W: Return cache name
-    else Cache expired
-        W->>G: Create new context cache (container JSON)
-        G-->>W: Return cache name
-        W->>KV: Store cache name (TTL 30m)
+    alt Cache exists &amp; valid
+        KV-->>S: Return cache name
+    else Cache miss / expired
+        S->>G: caches.create(model, containerJson, ttl: 3600s)
+        G-->>S: Return cache name
+        S->>KV: put(cacheKey, cacheName, expirationTtl: 3600)
     end
 
-    W->>G: generateContentStream(history + question)
+    S->>G: generateContentStream(history + question + fileParts)
 
     loop SSE chunks
-        G-->>W: text chunk
-        W-->>C: data: {"text":"..."}
+        G-->>S: text chunk
+        S-->>C: data: {"text":"..."}
         C-->>D: onChunk(text)
         D->>D: Append chunk to model msg
     end
 
-    W-->>C: data: [DONE]
-    W->>DB: INSERT user + model messages
-    W->>DB: UPDATE session.updated_at
+    S-->>C: data: [DONE]
+    S->>DB: INSERT user + model messages + link attachments
+    S->>DB: UPDATE session.updated_at
 
-    D->>D: Auto-title if first reply
-    D->>C: renameSession(title)
-    C->>W: PATCH /api/sessions/:id
+    D->>C: renameSession(title) on first reply
+    C->>R: PATCH /api/sessions/:id
                 </pre>
             </div>
 
@@ -876,88 +913,84 @@ sequenceDiagram
                         <div class="step-item" id="flows-gtm-step-1">
                             <div class="step-number">1</div>
                             <div class="step-content">
-                                <strong>Optimistic UI Update:</strong> Before the network request fires, <code>Dashboard.tsx</code> appends the user's message to local state and immediately inserts an empty model message placeholder. This gives the user instant visual feedback.
+                                <strong>Optimistic UI &amp; Abort Support:</strong> <code>Dashboard.tsx</code> inserts the user turn and empty model placeholder immediately, passing an <code>AbortController</code> signal so users can cancel mid-stream via the Stop button.
                             </div>
                         </div>
                         <div class="step-item" id="flows-gtm-step-2">
                             <div class="step-number">2</div>
                             <div class="step-content">
-                                <strong>POST to Chat Route:</strong> <code>chatApi.sendMessageStream()</code> sends <code>POST /api/chat</code> with body <code>{sessionId, question, mode: "gtm"}</code>. The Worker first verifies session ownership (D1 JOIN on <code>sessions</code> and <code>users</code>), then loads full message history via SELECT.
+                                <strong>Session, History &amp; Attachment Validation:</strong> <code>routes/chat.ts</code> enforces rate limits, verifies session ownership, validates attachments belong to both user and session, and builds multimodal parts (including extracted <code>.docx</code>/<code>.xlsx</code> text).
                             </div>
                         </div>
                         <div class="step-item" id="flows-gtm-step-3">
                             <div class="step-number">3</div>
                             <div class="step-content">
-                                <strong>KV Cache Check:</strong> The Worker checks KV for a cached Gemini context name keyed to the GTM container ID. If the cache exists and is within its 30-minute TTL, the cache name is reused, avoiding re-uploading the entire container JSON to Gemini.
+                                <strong>Model + Hash Context Cache Check:</strong> <code>getOrCreateCache()</code> keys KV/GCS by <code>gemini_gtm_context_cache:&lt;model&gt;:&lt;hash&gt;</code>, ensuring switching between Flash and Pro never hits a cross-model cache mismatch.
                             </div>
                         </div>
                         <div class="step-item" id="flows-gtm-step-4">
                             <div class="step-number">4</div>
                             <div class="step-content">
-                                <strong>Cache Miss — Context Creation:</strong> If KV returns nothing (or the cache expired), the Worker calls Gemini to create a new context cache from the container JSON, receives the cache name back, then writes it to KV with a 30-minute TTL for future requests.
+                                <strong>Cache Miss / Inline Fallback:</strong> Creates a 1-hour (<code>3600s</code>) Vertex AI context cache if missing; if cache creation is unsupported or fails, falls back gracefully to inline system instruction injection.
                             </div>
                         </div>
                         <div class="step-item" id="flows-gtm-step-5">
                             <div class="step-number">5</div>
                             <div class="step-content">
-                                <strong>SSE Stream:</strong> <code>generateContentStream(history + question)</code> is called against Gemini. As each text chunk arrives, the Worker immediately flushes it to the client as <code>data: {"text":"..."}\n\n</code>. <code>chatApi.ts</code> reads the <code>ReadableStream</code> and calls <code>onChunk(text)</code> to append each token to the placeholder message in the Dashboard.
+                                <strong>Disconnect-Safe SSE Stream:</strong> Chunks stream as <code>data: {"text":"..."}</code> via <code>TransformStream</code>; write errors on client abort are caught cleanly without crashing the isolate.
                             </div>
                         </div>
                         <div class="step-item" id="flows-gtm-step-6">
                             <div class="step-number">6</div>
                             <div class="step-content">
-                                <strong>Stream Termination:</strong> After the last chunk, the Worker sends <code>data: [DONE]</code> to signal completion. It then writes both the user message and the full assembled model message into D1 (<code>INSERT</code> into <code>messages</code>) and updates <code>sessions.updated_at</code>.
-                            </div>
-                        </div>
-                        <div class="step-item" id="flows-gtm-step-7">
-                            <div class="step-number">7</div>
-                            <div class="step-content">
-                                <strong>Auto-Title:</strong> If this was the first AI reply in the session, <code>Dashboard.tsx</code> extracts a title from the response and calls <code>chatApi.renameSession()</code> → <code>PATCH /api/sessions/:id</code>, updating the sidebar entry automatically.
+                                <strong>Persistence &amp; Auto-Title:</strong> Once streaming completes, <code>streamGtmChat()</code> writes both turns and attachment links to D1/Postgres, and the frontend auto-titles the session on its first reply.
                             </div>
                         </div>
                     </div>
                 </div>
             </div>
 
-            <h3>GA4 Function Calling Flow</h3>
+            <h3>GA4 Parallel Function Calling &amp; Private Charting Flow</h3>
             <div class="graph-container" id="flows-ga4-diagram">
                 <pre class="mermaid">
 sequenceDiagram
     participant U as User (Browser)
     participant D as Dashboard.tsx
     participant C as chatApi.ts
-    participant W as Worker (CF)
-    participant DB as D1 Database
-    participant G as Gemini API
-    participant GA4 as GA4 APIs
-    participant QC as QuickChart.io
+    participant R as routes/chat.ts
+    participant S as gemini-chat.ts
+    participant G as Vertex AI Gemini
+    participant GA4 as GA4 Data/Admin APIs
+    participant QC as QuickChart v4
+    participant Store as R2 / GCS + DB
 
-    U->>D: Types question + clicks Send
-    D->>C: sendMessage(sessionId, question, mode: "ga4")
-    C->>W: POST /api/chat {sessionId, question, mode: "ga4"}
+    U->>D: Types GA4 question + clicks Send
+    D->>C: sendMessageStream(sessionId, question, "ga4")
+    C->>R: POST /api/chat {sessionId, question, chatMode: "ga4"}
 
-    W->>DB: Verify session ownership
-    W->>DB: Load message history
+    R->>Store: Verify session + ga4_property_id + load history
+    R->>S: runGA4Chat(...)
+    S->>Store: Decrypt + refresh GA4 OAuth access token
 
-    Note over W: Auth validates: Bearer token + X-BrightHorizon-App header
-
-    loop Up to 20 tool turns
-        W->>G: generateContent() with 9 function declarations
-        G-->>W: function_call (e.g., runReport or create_chart)
-        alt GA4 API call
-            W->>GA4: Execute GA4 API call
-            GA4-->>W: Return data
-        else Chart rendering
-            W->>QC: QuickChart.io API
-            QC-->>W: Return chart image URL
+    loop Up to 20 tool turns (parallel Promise.all per turn)
+        S->>G: generateContent() with 8 function declarations
+        G-->>S: functionCalls[]
+        par GA4 API tool calls
+            S->>GA4: Execute GA4 Data / Admin REST call
+            GA4-->>S: JSON metrics / dimensions
+        and Chart tool calls
+            S->>QC: POST /chart (version 4, PNG)
+            QC-->>S: PNG binary bytes
+            S->>Store: Save PNG to CHAT_FILES + attachments -> /api/files/:id
         end
-        W->>G: Return function result
+        S->>G: Return functionResponses[]
     end
 
-    G-->>W: Final text response
-    W-->>C: JSON response
-    C-->>D: onMessage(text)
-    D->>DB: INSERT user + model messages
+    G-->>S: Final candidate (thought parts filtered out)
+    S-->>R: {answer, charts}
+    R->>Store: INSERT user + model messages (with charts JSON)
+    R-->>C: JSON {answer, charts}
+    C-->>D: Render Markdown + fetch charts via AuthImage
                 </pre>
             </div>
 
@@ -967,99 +1000,67 @@ sequenceDiagram
                         <div class="step-item" id="flows-ga4-step-1">
                             <div class="step-number">1</div>
                             <div class="step-content">
-                                <strong>JSON Response Mode:</strong> Unlike GTM's SSE stream, the GA4 chat route returns a single JSON response after all function-calling turns complete. <code>chatApi.sendMessageStream()</code> handles both modes — it detects the content type and invokes <code>onMessage(text)</code> for GA4 instead of <code>onChunk()</code>.
+                                <strong>JSON Tool-Loop Mode:</strong> <code>POST /api/chat</code> with <code>chatMode: "ga4"</code> invokes <code>runGA4Chat()</code>, passing the session's bound <code>ga4_property_id</code> and the user's decrypted (and auto-refreshed) Google OAuth access token.
                             </div>
                         </div>
                         <div class="step-item" id="flows-ga4-step-2">
                             <div class="step-number">2</div>
                             <div class="step-content">
-                                <strong>Session & Auth Validation:</strong> The Worker verifies session ownership in D1, loads full message history, and validates the Bearer token + <code>X-BrightHorizon-App</code> header (or infers the app from the URL for OAuth callback paths) before proceeding.
+                                <strong>8 Function Declarations:</strong> Exposes 7 GA4 Data/Admin API tools (with strict numeric property ID validation and optional <code>dimensions</code>) plus <code>create_chart</code> (without exposing any third-party API keys to the LLM).
                             </div>
                         </div>
                         <div class="step-item" id="flows-ga4-step-3">
                             <div class="step-number">3</div>
                             <div class="step-content">
-                                <strong>Gemini Function Declaration:</strong> The Worker calls <code>generateContent()</code> with 9 pre-declared function schemas (e.g., <code>runReport</code>, <code>listDimensions</code>, <code>create_chart</code>). Gemini reads the user's question and selects the most appropriate tool to call.
+                                <strong>Parallel Tool Execution:</strong> Multiple function calls issued in a single Gemini turn execute concurrently via <code>Promise.all()</code> across up to 20 sequential turns.
                             </div>
                         </div>
                         <div class="step-item" id="flows-ga4-step-4">
                             <div class="step-number">4</div>
                             <div class="step-content">
-                                <strong>Function Execution Loop (up to 20 turns):</strong> Gemini returns a <code>function_call</code> block. The Worker's <code>executeGA4Function()</code> in <code>services/ga4/api.ts</code> dispatches to either the GA4 Data API or GA4 Admin API using the user's OAuth access token (refreshing it if expired).
+                                <strong>Chart.js v4 Private Storage:</strong> <code>createChart()</code> posts Chart.js v4 configs to QuickChart, saves PNGs directly into R2/GCS + <code>attachments</code>, and returns authenticated <code>/api/files/:id</code> URLs (falling back to ImgBB/shortUrl only when private storage is unavailable).
                             </div>
                         </div>
                         <div class="step-item" id="flows-ga4-step-5">
                             <div class="step-number">5</div>
                             <div class="step-content">
-                                <strong>Chart Rendering Branch:</strong> If Gemini calls <code>create_chart</code>, the Worker delegates to <code>services/ga4/tools/charts.ts</code>, which builds a QuickChart.io API request, retrieves a chart image URL, and packages it as a <code>function_result</code> back to Gemini.
-                            </div>
-                        </div>
-                        <div class="step-item" id="flows-ga4-step-6">
-                            <div class="step-number">6</div>
-                            <div class="step-content">
-                                <strong>Iterative Grounding:</strong> Each <code>function_result</code> is fed back into Gemini as part of the conversation. Gemini may issue another <code>function_call</code> (e.g., first fetching data then charting it). This loop continues until Gemini produces a final <code>text</code> response.
-                            </div>
-                        </div>
-                        <div class="step-item" id="flows-ga4-step-7">
-                            <div class="step-number">7</div>
-                            <div class="step-content">
-                                <strong>Response Persistence:</strong> Once the final text response is assembled (with any embedded chart URLs in the <code>charts</code> field), the Worker returns the JSON to the client. <code>Dashboard.tsx</code> then INSERTs both the user and model messages into D1.
+                                <strong>Thought Filtering &amp; Persistence:</strong> Internal Gemini <code>thought</code> parts are stripped from <code>textParts</code>; <code>routes/chat.ts</code> persists both messages including the <code>charts</code> JSON column so charts survive reload, and <code>AuthImage</code> fetches them securely with Bearer auth.
                             </div>
                         </div>
                     </div>
                 </div>
             </div>
 
-            <h3>Authentication Flow</h3>
+            <h3>Authentication &amp; Signed GA4 OAuth Flow</h3>
             <div class="graph-container" id="flows-auth-diagram">
                 <pre class="mermaid">
 sequenceDiagram
     participant U as User
-    participant AP as AuthPage
-    participant AC as AuthContext
-    participant AA as authApi.ts
-    participant W as Worker
-    participant DB as D1
+    participant AP as AuthPage / Dashboard
+    participant AC as AuthContext / chatApi
+    participant W as API (Worker / Cloud Run)
+    participant DB as D1 / Postgres
+    participant G as Google OAuth 2.0
 
-    Note over U,DB: --- Sign Up (First User — Bootstrap) ---
+    Note over U,DB: --- Bootstrap / Atomic Invite Signup / Login ---
+    U->>AP: Submits credentials (+ INV-key for signup)
+    AP->>AC: bootstrap / signup / login
+    AC->>W: POST /api/auth/... (rate limited)
+    W->>DB: PBKDF2 hash/verify + atomic invite claim
+    W-->>AC: {token, user} (30-day Bearer token)
 
-    U->>AP: Fill username, email, password
-    AP->>AC: bootstrap(username, email, password)
-    AC->>AA: authApi.bootstrap(...)
-    AA->>W: POST /api/auth/bootstrap
-    W->>DB: COUNT users
-    DB-->>W: 0 users
-    W->>W: hashPassword (PBKDF2)
-    W->>DB: INSERT user
-    W->>W: generateToken()
-    W->>DB: INSERT auth_token (30-day expiry)
-    W-->>AA: {token, user}
-    AA-->>AC: setToken + setUser
-    AC-->>AP: isAuthenticated = true
-    AP-->>U: Redirect to Dashboard
-
-    Note over U,DB: --- Subsequent Login ---
-
-    U->>AP: Fill email, password
-    AP->>AC: login(email, password)
-    AC->>AA: authApi.login(...)
-    AA->>W: POST /api/auth/login
-    W->>DB: SELECT user by email
-    W->>W: verifyPassword (PBKDF2)
-    W->>DB: INSERT new auth_token
-    W-->>AA: {token, user}
-
-    Note over U,DB: --- Token Validation on Reload ---
-
-    U->>AP: Page refresh
-    AC->>AC: getToken() from localStorage
-    AC->>AA: authApi.getMe()
-    AA->>W: GET /api/auth/me (Bearer token + X-BrightHorizon-App header)
-    W->>DB: JOIN auth_tokens + users
-    W-->>AA: {user}
-    AA-->>AC: setUser (session restored)
-    AC-->>AP: isAuthenticated = true
-    AP-->>U: Resume Dashboard (no re-login needed)
+    Note over U,G: --- HMAC-Signed GA4 OAuth Popup ---
+    U->>AP: Clicks Connect GA4 Account
+    AP->>AC: getGa4OAuthUrl() (Bearer Header)
+    AC->>W: GET /api/ga4/oauth/authorize?format=json
+    W->>W: signState({userId, ts, nonce, origin}, TOKEN_ENCRYPTION_KEY)
+    W-->>AC: {url: accounts.google.com/...}
+    AP->>G: Open popup to Google consent (analytics.readonly + userinfo.email)
+    G-->>W: GET /api/ga4/oauth/callback?code=...&amp;state=...
+    W->>W: verifyState() + 10m TTL check
+    W->>G: Exchange code for tokens + userinfo email
+    W->>DB: Encrypt tokens (AES-GCM) -> UPSERT ga4_oauth_tokens
+    W-->>AP: HTML-escaped result page -> postMessage(origin)
                 </pre>
             </div>
 
@@ -1069,43 +1070,19 @@ sequenceDiagram
                         <div class="step-item" id="flows-auth-step-1">
                             <div class="step-number">1</div>
                             <div class="step-content">
-                                <strong>Bootstrap (First User):</strong> If no users exist in D1, the first registration bypasses invite keys. The Worker COUNTs rows in <code>users</code> and proceeds only when the count is 0.
+                                <strong>App-Scoped PBKDF2 Auth:</strong> Bootstrap initializes the first user; subsequent signups validate email format, check invite-key app scope, and atomically claim the key (<code>WHERE used_by IS NULL</code>) using 100K-iteration PBKDF2 + <code>timingSafeEqual</code>.
                             </div>
                         </div>
                         <div class="step-item" id="flows-auth-step-2">
                             <div class="step-number">2</div>
                             <div class="step-content">
-                                <strong>Invite-Key Signup:</strong> Subsequent users must supply a valid one-time invite key. The Worker validates the key, marks it as used (<code>used_by</code>, <code>used_at</code>), then creates the account.
+                                <strong>Signed OAuth Initiation:</strong> Instead of exposing Bearer tokens in popup URLs, <code>Dashboard</code> fetches the signed consent URL via <code>GET /api/ga4/oauth/authorize?format=json</code> with an <code>Authorization: Bearer</code> header.
                             </div>
                         </div>
                         <div class="step-item" id="flows-auth-step-3">
                             <div class="step-number">3</div>
                             <div class="step-content">
-                                <strong>Password Hashing:</strong> On both signup and login, passwords are processed with PBKDF2 + a random salt. Plain-text passwords are never written to D1.
-                            </div>
-                        </div>
-                        <div class="step-item" id="flows-auth-step-4">
-                            <div class="step-number">4</div>
-                            <div class="step-content">
-                                <strong>Token Issuance:</strong> After a successful credential check, <code>generateToken()</code> produces a random Bearer token inserted into <code>auth_tokens</code> with a 30-day <code>expires_at</code> timestamp.
-                            </div>
-                        </div>
-                        <div class="step-item" id="flows-auth-step-5">
-                            <div class="step-number">5</div>
-                            <div class="step-content">
-                                <strong>Client Persistence:</strong> The token is returned to <code>authApi.ts</code>, which stores it in <code>localStorage</code>. <code>AuthContext</code> sets <code>isAuthenticated = true</code> and redirects to the Dashboard.
-                            </div>
-                        </div>
-                        <div class="step-item" id="flows-auth-step-6">
-                            <div class="step-number">6</div>
-                            <div class="step-content">
-                                <strong>Token Validation on Reload:</strong> On every page refresh, <code>AuthContext</code> reads the token from <code>localStorage</code> and calls <code>GET /api/auth/me</code> with a <code>Bearer</code> header and <code>X-BrightHorizon-App</code>. The Worker JOINs <code>auth_tokens</code> + <code>users</code> to verify expiry and return the user object — no re-login required.
-                            </div>
-                        </div>
-                        <div class="step-item" id="flows-auth-step-7">
-                            <div class="step-number">7</div>
-                            <div class="step-content">
-                                <strong>Logout:</strong> Calling <code>POST /api/auth/logout</code> deletes the token row from D1 and clears <code>localStorage</code>, invalidating the session immediately on the server side.
+                                <strong>Callback Verification &amp; Storage:</strong> The callback verifies the HMAC-SHA256 <code>state</code> signature and 10-minute TTL, exchanges the code, fetches <code>connected_email</code>, encrypts tokens with AES-GCM, and notifies the opener via origin-scoped <code>postMessage</code>.
                             </div>
                         </div>
                     </div>
@@ -1118,48 +1095,63 @@ sequenceDiagram
         <!-- 6. Infrastructure & Files -->
         <section id="infrastructure">
             <div class="section-header">
-                <h2>Infrastructure & File Organization</h2>
-                <p>Deployment topology and internal file dependencies.</p>
+                <h2>Infrastructure &amp; File Organization</h2>
+                <p>Dual deployment topology (Cloudflare Edge &amp; GCP Cloud Run) and module dependency graph.</p>
             </div>
 
             <h3>Deployment Topology</h3>
             <div class="graph-container" id="infra-topology-diagram">
                 <pre class="mermaid">
 graph TB
-    subgraph Dev["🖥️ Local Development"]
+    subgraph Dev["Local Development"]
         GTMVite["Vite GTM (:5173)"]
         GA4Vite["Vite GA4 (:5174)"]
         WranglerDev["Wrangler Dev (:8787)"]
+        ServerDev["Hono Node Server (:8787)"]
     end
 
-    subgraph Prod["☁️ Production (Cloudflare)"]
+    subgraph CFProd["Production Option A: Cloudflare"]
         GTMProd["brighthorizon-gtm.pages.dev"]
         GA4Prod["brighthorizon-ga4.pages.dev"]
-        WorkerProd["gtm-auditor-server (Worker)"]
+        WorkerProd["gtm-auditor-server (Worker + Cron)"]
         D1Prod["D1: gtm_chat_history"]
         KVProd["KV: GTM_CONTAINER"]
+        R2Prod["R2: CHAT_FILES"]
     end
 
-    subgraph Config["⚙️ Config Files"]
-        ViteConfigGtm["apps/gtm/vite.config.ts"]
-        ViteConfigGa4["apps/ga4/vite.config.ts"]
-        WranglerToml["wrangler.toml (root)"]
-        EnvFile[".env / .env.production"]
+    subgraph GCPProd["Production Option B: Google Cloud Run"]
+        CloudRunSvc["Cloud Run (Dockerfile / Node 22)"]
+        CloudSQL["Cloud SQL Postgres"]
+        GcsContainer["GCS Container Bucket"]
+        GcsFiles["GCS Files Bucket"]
     end
 
-    ViteConfigGtm -->|"configures"| GTMVite
-    ViteConfigGa4 -->|"configures"| GA4Vite
-    ViteConfigGtm -->|"builds"| GTMProd
-    ViteConfigGa4 -->|"builds"| GA4Prod
-    WranglerToml -->|"configures"| WranglerDev
-    WranglerToml -->|"deploys"| WorkerProd
+    subgraph Config["Config &amp; Schemas"]
+        WranglerToml["wrangler.toml / .example"]
+        DockerCfg["Dockerfile + .dockerignore"]
+        ServerEnv["server/.env / .env.example"]
+        Schemas["schema.sql + schema-postgres.sql"]
+    end
+
+    GTMVite -->|"proxies /api"| WranglerDev
+    GA4Vite -->|"proxies /api"| ServerDev
+    WranglerToml --> WorkerProd
     WorkerProd --> D1Prod
     WorkerProd --> KVProd
-    GTMVite -->|"proxies to"| WranglerDev
-    GA4Vite -->|"proxies to"| WranglerDev
+    WorkerProd --> R2Prod
+    DockerCfg --> CloudRunSvc
+    ServerEnv --> CloudRunSvc
+    CloudRunSvc --> CloudSQL
+    CloudRunSvc --> GcsContainer
+    CloudRunSvc --> GcsFiles
+    Schemas -.-> D1Prod
+    Schemas -.-> CloudSQL
+    GTMVite -.-> GTMProd
+    GA4Vite -.-> GA4Prod
 
     style Dev fill:#dcfce7,stroke:#1a7f37
-    style Prod fill:#e8f0fe,stroke:#0969da
+    style CFProd fill:#e8f0fe,stroke:#0969da
+    style GCPProd fill:#f3e8ff,stroke:#8250df
     style Config fill:#fff8e1,stroke:#d29922
                 </pre>
             </div>
@@ -1170,31 +1162,25 @@ graph TB
                         <div class="step-item" id="infra-topology-step-1">
                             <div class="step-number">1</div>
                             <div class="step-content">
-                                <strong>Local Dev Startup:</strong> <code>pnpm run dev</code> at the monorepo root launches Vite for the GTM app (port 5173) and GA4 app (port 5174) in parallel, plus Wrangler Dev on port 8787. Both Vite configs proxy <code>/api/*</code> requests to Wrangler, so the frontend and backend run as a unified local environment.
+                                <strong>Local Development:</strong> Run <code>pnpm run dev:gtm</code> (<code>:5173</code>) and/or <code>pnpm run dev:ga4</code> (<code>:5174</code>) alongside either <code>pnpm run dev:worker</code> (Wrangler) or <code>pnpm run dev:server</code> (Node/Hono on <code>:8787</code>).
                             </div>
                         </div>
                         <div class="step-item" id="infra-topology-step-2">
                             <div class="step-number">2</div>
                             <div class="step-content">
-                                <strong>Config Sources:</strong> <code>apps/gtm/vite.config.ts</code> and <code>apps/ga4/vite.config.ts</code> define the proxy rules, port numbers, and build output paths. <code>wrangler.toml</code> at the repo root binds the D1 database and KV namespace for both local simulation and production deployment.
+                                <strong>Cloudflare Stack:</strong> <code>wrangler.toml</code> configures the Worker, D1, KV, R2 bindings, and daily Cron cleanup, paired with static SPAs hosted on Cloudflare Pages.
                             </div>
                         </div>
                         <div class="step-item" id="infra-topology-step-3">
                             <div class="step-number">3</div>
                             <div class="step-content">
-                                <strong>Production Deployment:</strong> <code>pnpm run build</code> compiles each frontend into static JS/CSS bundles. These are uploaded to Cloudflare Pages (<code>brighthorizon-gtm.pages.dev</code> and <code>brighthorizon-ga4.pages.dev</code>). <code>wrangler deploy</code> publishes the Worker as <code>gtm-auditor-server</code> to Cloudflare's global edge network.
+                                <strong>Google Cloud Run Stack:</strong> Root <code>Dockerfile</code> packages <code>server/</code> + <code>worker/</code> under non-root <code>USER node</code> with frozen pnpm lockfile dependencies, connecting to Cloud SQL Postgres and GCS buckets.
                             </div>
                         </div>
                         <div class="step-item" id="infra-topology-step-4">
                             <div class="step-number">4</div>
                             <div class="step-content">
-                                <strong>Environment Variables:</strong> Secrets (Gemini API key, Google OAuth credentials) are stored in <code>.env.production</code> and injected as Worker secrets via <code>wrangler secret put</code>, never committed to source control.
-                            </div>
-                        </div>
-                        <div class="step-item" id="infra-topology-step-5">
-                            <div class="step-number">5</div>
-                            <div class="step-content">
-                                <strong>Managed Storage:</strong> D1 (<code>gtm_chat_history</code>) and KV (<code>GTM_CONTAINER</code>) are zero-configuration Cloudflare services. Schema migrations are applied via <code>wrangler d1 execute</code> using <code>schema.sql</code> — no database server to provision or maintain.
+                                <strong>Parity Schemas &amp; Config Templates:</strong> <code>schema.sql</code> (D1) and <code>schema-postgres.sql</code> (Postgres) define matching 7-table schemas; <code>wrangler.toml.example</code> and <code>server/.env.example</code> keep secret templates safe for VCS.
                             </div>
                         </div>
                     </div>
@@ -1208,66 +1194,86 @@ graph TD
     subgraph FrontendApps["frontend/apps/"]
         GTMApp["gtm/src/App.tsx"]
         GA4App["ga4/src/App.tsx"]
-        GTMAuthPage["gtm/src/AuthPage.tsx"]
-        GA4AuthPage["ga4/src/AuthPage.tsx"]
     end
 
     subgraph SharedPackage["frontend/packages/shared/src/"]
-        AuthProvider["context/AuthContext.tsx (AuthProvider)"]
-        Dashboard["Dashboard.tsx"]
-        Sidebar["Sidebar.tsx"]
-        AuthContext["context/AuthContext.tsx (useAuth hook)"]
+        AppShell["components/AppShell.tsx"]
+        Dashboard["components/Dashboard.tsx"]
+        Sidebar["components/Sidebar.tsx"]
+        AuthMedia["components/AuthMedia.tsx"]
+        AuthPage["components/AuthPage.tsx"]
+        AuthContext["context/AuthContext.tsx"]
         AuthApiSvc["services/authApi.ts"]
         ChatApiSvc["services/chatApi.ts"]
+        GtmMinifier["utils/gtm-minifier.ts"]
     end
 
     subgraph Backend["worker/"]
-        WorkerIndex["index.ts (Entry)"]
+        WorkerIndex["worker/index.ts"]
         AuthRoutes["routes/auth.ts"]
         SessionRoutes["routes/sessions.ts"]
         ChatRoutes["routes/chat.ts"]
+        FilesRoutes["routes/files.ts"]
+        ModelsRoutes["routes/models.ts"]
         GA4OAuthRoutes["routes/ga4-oauth.ts"]
-        GtmChat["services/gtm-chat.ts"]
-        GA4Chat["services/ga4/chat.ts"]
+        GeminiChat["services/gemini-chat.ts"]
         GA4Api["services/ga4/api.ts"]
         GA4OAuthSvc["services/ga4/oauth.ts"]
         Charts["services/ga4/tools/charts.ts"]
         AuthMiddleware["middleware/auth.ts"]
+        CryptoUtils["utils/crypto.ts"]
+        FileHelpers["utils/file-helpers.ts"]
+        RateLimit["utils/rate-limit.ts"]
     end
 
-    subgraph Config["Config Files"]
-        RootPkg["package.json"]
-        Workspace["pnpm-workspace.yaml"]
-        Wrangler["wrangler.toml"]
-        Schema["schema.sql"]
+    subgraph CloudRunServer["server/src/ &amp; tests/"]
+        ServerIndex["server/src/index.ts"]
+        ServerAdapters["env.ts · db.ts · kv.ts · r2.ts"]
+        Tests["tests/*.test.ts (15 unit tests)"]
     end
 
-    GTMApp --> AuthContext
-    GA4App --> AuthContext
-    GTMApp --> Dashboard
-    GA4App --> Dashboard
-    GTMAuthPage --> AuthContext
-    GA4AuthPage --> AuthContext
-
+    GTMApp --> AppShell
+    GA4App --> AppShell
+    AppShell --> AuthPage
+    AppShell --> Dashboard
+    AppShell --> Sidebar
+    AppShell --> AuthContext
+    Dashboard --> AuthMedia
     Dashboard --> ChatApiSvc
     Sidebar --> ChatApiSvc
-    AuthProvider --> AuthApiSvc
+    AuthContext --> AuthApiSvc
 
     WorkerIndex --> AuthRoutes
     WorkerIndex --> SessionRoutes
     WorkerIndex --> ChatRoutes
+    WorkerIndex --> FilesRoutes
+    WorkerIndex --> ModelsRoutes
     WorkerIndex --> GA4OAuthRoutes
-    ChatRoutes --> GtmChat
-    ChatRoutes --> GA4Chat
-    GA4Chat --> GA4Api
-    GA4Chat --> Charts
-    GA4OAuthRoutes --> AuthMiddleware
-    AuthRoutes --> AuthMiddleware
+    WorkerIndex --> AuthMiddleware
+
+    ServerIndex --> ServerAdapters
+    ServerIndex --> AuthRoutes
+    ServerIndex --> ChatRoutes
+
+    ChatRoutes --> GeminiChat
+    ChatRoutes --> FileHelpers
+    ChatRoutes --> RateLimit
+    GeminiChat --> GA4Api
+    GeminiChat --> Charts
+    GeminiChat --> GA4OAuthSvc
+    AuthRoutes --> CryptoUtils
+    AuthRoutes --> RateLimit
+    GA4OAuthRoutes --> CryptoUtils
+    GA4OAuthRoutes --> GA4OAuthSvc
+
+    Tests -.-> GtmMinifier
+    Tests -.-> CryptoUtils
+    Tests -.-> ServerAdapters
 
     style FrontendApps fill:#e8f0fe,stroke:#0969da
     style SharedPackage fill:#f3e8ff,stroke:#8250df
-    style Backend fill:#f3e8ff,stroke:#8250df
-    style Config fill:#fff8e1,stroke:#d29922
+    style Backend fill:#dcfce7,stroke:#1a7f37
+    style CloudRunServer fill:#fff8e1,stroke:#d29922
                 </pre>
             </div>
 
@@ -1277,37 +1283,31 @@ graph TD
                         <div class="step-item" id="infra-files-step-1">
                             <div class="step-number">1</div>
                             <div class="step-content">
-                                <strong>Monorepo Root:</strong> <code>package.json</code> + <code>pnpm-workspace.yaml</code> declare the workspace, linking <code>frontend/apps/gtm</code>, <code>frontend/apps/ga4</code>, <code>frontend/packages/shared</code>, and the <code>worker</code> directory. All <code>pnpm</code> scripts (dev, build, deploy) run from the root.
+                                <strong>Workspace Frontend:</strong> <code>gtm/src/App.tsx</code> and <code>ga4/src/App.tsx</code> delegate directly to <code>AppShell.tsx</code>, <code>AuthPage.tsx</code>, <code>Dashboard.tsx</code>, <code>Sidebar.tsx</code>, and <code>AuthMedia.tsx</code> inside <code>@brighthorizon/shared</code>.
                             </div>
                         </div>
                         <div class="step-item" id="infra-files-step-2">
                             <div class="step-number">2</div>
                             <div class="step-content">
-                                <strong>App → Shared Dependency:</strong> <code>gtm/src/App.tsx</code> and <code>ga4/src/App.tsx</code> both import <code>AuthContext</code>, <code>Dashboard</code>, and <code>Sidebar</code> from <code>@brighthorizon/shared</code>. The shared package is referenced as a workspace package (no publishing required) and resolved via pnpm's symlink mechanism.
+                                <strong>Shared Worker Routers:</strong> <code>worker/index.ts</code> dispatches to 6 route modules (<code>auth</code>, <code>sessions</code>, <code>chat</code>, <code>files</code>, <code>models</code>, <code>ga4-oauth</code>) guarded by <code>middleware/auth.ts</code>.
                             </div>
                         </div>
                         <div class="step-item" id="infra-files-step-3">
                             <div class="step-number">3</div>
                             <div class="step-content">
-                                <strong>Worker Entry Point:</strong> <code>worker/index.ts</code> imports and registers all four route handlers — <code>routes/auth.ts</code>, <code>routes/sessions.ts</code>, <code>routes/chat.ts</code>, and <code>routes/ga4-oauth.ts</code>. It is the single file that Wrangler bundles and deploys.
+                                <strong>AI &amp; Analytics Services:</strong> <code>services/gemini-chat.ts</code> unifies GTM streaming + context caching and GA4 parallel tool loops across <code>ga4/api.ts</code>, <code>ga4/oauth.ts</code>, and <code>ga4/tools/charts.ts</code>.
                             </div>
                         </div>
                         <div class="step-item" id="infra-files-step-4">
                             <div class="step-number">4</div>
                             <div class="step-content">
-                                <strong>Service Separation:</strong> Chat routes delegate to dedicated service files — <code>services/gtm-chat.ts</code> for SSE streaming and <code>services/ga4/chat.ts</code> for function calling. GA4 chat further depends on <code>services/ga4/api.ts</code> (API execution) and <code>services/ga4/tools/charts.ts</code> (QuickChart integration).
+                                <strong>Security &amp; Extraction Utils:</strong> <code>crypto.ts</code> (PBKDF2, AES-GCM, HMAC state), <code>rate-limit.ts</code>, <code>http.ts</code>, <code>genai-client.ts</code>, and <code>file-helpers.ts</code> (including OOXML <code>.docx</code>/<code>.xlsx</code> parsing).
                             </div>
                         </div>
                         <div class="step-item" id="infra-files-step-5">
                             <div class="step-number">5</div>
                             <div class="step-content">
-                                <strong>Cross-Cutting Utilities:</strong> <code>middleware/auth.ts</code> is shared by both <code>routes/auth.ts</code> and <code>routes/ga4-oauth.ts</code> for token validation. <code>utils/crypto.ts</code> provides PBKDF2 hashing used by <code>routes/auth.ts</code>. <code>utils/http.ts</code> supplies response helpers used across all routes.
-                            </div>
-                        </div>
-                        <div class="step-item" id="infra-files-step-6">
-                            <div class="step-number">6</div>
-                            <div class="step-content">
-                                <strong>Infrastructure as Code:</strong> <code>wrangler.toml</code> defines D1 and KV bindings, Worker name, and compatibility flags. <code>schema.sql</code> is the single source of truth for all 6 database tables and is applied via <code>wrangler d1 execute</code> on first setup or migration.
+                                <strong>Cloud Run Server &amp; Automated Tests:</strong> <code>server/src/index.ts</code> reuses all <code>worker/routes/*</code> via <code>db.ts</code>, <code>kv.ts</code>, and <code>r2.ts</code>; <code>tests/*.test.ts</code> executes 15 unit tests via <code>pnpm test</code>.
                             </div>
                         </div>
                     </div>
@@ -1331,46 +1331,56 @@ graph TD
                 <tbody>
                     <tr>
                         <td><strong>Frontend</strong></td>
-                        <td>React 19 + Tailwind v4</td>
-                        <td>Modern, animated, responsive UI</td>
+                        <td>React 19.2 + Vite 6.4 + Tailwind CSS v4.2 + @tailwindcss/typography</td>
+                        <td>Dual SPAs sharing one component &amp; API package</td>
                     </tr>
                     <tr>
-                        <td><strong>Runtime</strong></td>
-                        <td>Cloudflare Workers</td>
-                        <td>Global edge computing, 0ms cold starts</td>
+                        <td><strong>Backend Runtimes</strong></td>
+                        <td>Cloudflare Workers + GCP Cloud Run (Node 22 / Hono)</td>
+                        <td>Portable edge or containerized API execution</td>
                     </tr>
                     <tr>
-                        <td><strong>AI Model</strong></td>
-                        <td>Gemini 3.1 Pro Preview</td>
-                        <td>Multimodal reasoning & function calling</td>
+                        <td><strong>AI Engine</strong></td>
+                        <td>Vertex AI Gemini (@google/genai 2.10 — 2.5 Flash / Pro / Flash-Lite)</td>
+                        <td>Context caching, SSE streaming, parallel tool calling</td>
                     </tr>
                     <tr>
-                        <td><strong>Database</strong></td>
-                        <td>Cloudflare D1 (SQLite)</td>
-                        <td>Edge SQL storage with session persistence</td>
+                        <td><strong>Databases</strong></td>
+                        <td>Cloudflare D1 (SQLite) &amp; Cloud SQL Postgres (7 tables)</td>
+                        <td>Users, tokens, invites, sessions, messages, OAuth, attachments</td>
                     </tr>
                     <tr>
-                        <td><strong>Cache</strong></td>
-                        <td>Cloudflare KV</td>
-                        <td>Fast retrieval for large GTM JSON contexts</td>
+                        <td><strong>Cache &amp; Object Storage</strong></td>
+                        <td>Cloudflare KV + R2 / GCS Buckets (via kv.ts &amp; r2.ts shims)</td>
+                        <td>Minified GTM container, context cache keys, files &amp; private charts</td>
                     </tr>
                     <tr>
-                        <td><strong>Auth Strategy</strong></td>
-                        <td>PBKDF2 + Bearer Tokens</td>
-                        <td>Secure identity & 30-day session management</td>
+                        <td><strong>Security Controls</strong></td>
+                        <td>PBKDF2 + AES-GCM + HMAC OAuth State + Rate Limits + CSP Sandbox</td>
+                        <td>Hardened multi-tenant auth, OAuth, and private media serving</td>
+                    </tr>
+                    <tr>
+                        <td><strong>API &amp; Tooling Surface</strong></td>
+                        <td>24 /api/* routes + /healthz · 8 GA4/chart tools</td>
+                        <td>Complete auth, sessions, chat, files, models, and GA4 workflows</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Codebase &amp; Tests</strong></td>
+                        <td>50 TS/TSX source files · 15 unit tests (node:test via tsx)</td>
+                        <td>Type-checked across 5 packages and verified with automated tests</td>
                     </tr>
                 </tbody>
             </table>
         </section>
 
         <footer>
-            <p>&copy; 2026 BrightHorizon AI — Advanced GTM & GA4 Auditing Platform</p>
+            <p>&copy; 2026 BrightHorizon AI — Advanced GTM &amp; GA4 Auditing Platform</p>
         </footer>
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
     <script>
-        mermaid.initialize({ 
+        mermaid.initialize({
             startOnLoad: true,
             theme: 'base',
             themeVariables: {
@@ -1392,162 +1402,175 @@ graph TD
             }
         });
 
-        // ---- Interactive mapping between diagram nodes and explanation steps ----
         window.addEventListener('load', function() {
-            // Wait a tiny bit for Mermaid SVGs to be ready
             setTimeout(function() {
-                // Define mappings for each diagram
                 var diagramMappings = [
-                    // High-Level Architecture
                     {
                         containerSelector: '#high-level .graph-container .mermaid svg',
-                        nodeType: 'node',   // flowchart nodes
+                        nodeType: 'node',
                         mapping: {
-                            "Browser (SPA)":           ['high-level-step-1'],
-                            "GTM App (:5173)":         ['high-level-step-1'],
-                            "GA4 App (:5174)":         ['high-level-step-1'],
-                            "brighthorizon-gtm.pages.dev":   ['high-level-step-1'],
-                            "brighthorizon-ga4.pages.dev":   ['high-level-step-1'],
-                            "worker/index.ts":         ['high-level-step-2'],
-                            "D1: gtm_chat_history":    ['high-level-step-3'],
-                            "KV: GTM_CONTAINER":        ['high-level-step-3'],
-                            "Google Gemini API (gemini-3.1-pro-preview)": ['high-level-step-4'],
-                            "GA4 Data API":            ['high-level-step-5'],
-                            "GA4 Admin API":           ['high-level-step-5'],
-                            "QuickChart.io (Chart rendering)": ['high-level-step-5']
+                            "Browser (SPA)": ['high-level-step-1'],
+                            "GTM App (:5173)": ['high-level-step-1'],
+                            "GA4 App (:5174)": ['high-level-step-1'],
+                            "brighthorizon-gtm.pages.dev": ['high-level-step-1'],
+                            "brighthorizon-ga4.pages.dev": ['high-level-step-1'],
+                            "worker/index.ts (CF Worker)": ['high-level-step-2'],
+                            "server/src/index.ts (Cloud Run Hono)": ['high-level-step-2'],
+                            "Auth · Sessions · Chat · Files · Models · GA4 OAuth": ['high-level-step-2', 'high-level-step-6'],
+                            "D1 / Cloud SQL Postgres (7 tables)": ['high-level-step-3'],
+                            "KV / GCS Container Bucket": ['high-level-step-3'],
+                            "R2 / GCS Files Bucket": ['high-level-step-3', 'high-level-step-6'],
+                            "Vertex AI Gemini (2.5 Flash / Pro)": ['high-level-step-4'],
+                            "GA4 Data & Admin APIs": ['high-level-step-5'],
+                            "QuickChart.io (Chart.js v4)": ['high-level-step-5']
                         }
                     },
-                    // Frontend Component Tree
                     {
                         containerSelector: '#frontend-components-diagram .mermaid svg',
                         nodeType: 'node',
                         mapping: {
-                            "main.tsx":                ['frontend-components-step-1'],
-                            "App.tsx":                 ['frontend-components-step-2'],
-                            "AuthPage.tsx":            ['frontend-components-step-3'],
-                            "components/Dashboard.tsx": ['frontend-components-step-4'],
-                            "components/Sidebar.tsx":  ['frontend-components-step-4'],
-                            "components/ChatOutline.tsx": ['frontend-components-step-4'],
-                            "components/Ga4Settings.tsx": ['frontend-components-step-4'],
-                            "components/InviteKeyPanel.tsx": ['frontend-components-step-4'],
-                            "context/AuthContext.tsx (AuthProvider)": ['frontend-components-step-2'],
-                            "useAuth hook":            ['frontend-components-step-2'],
-                            "components/Toast.tsx (ToastProvider)": ['frontend-components-step-2'],
-                            "services/authApi.ts (createAuthApi)": ['frontend-components-step-5'],
-                            "services/chatApi.ts (createChatApi)": ['frontend-components-step-5'],
-                            "utils/clean-json.ts":     ['frontend-components-step-6'],
-                            "utils/gtm-minifier.ts":   ['frontend-components-step-6']
+                            "gtm/src/main.tsx": ['frontend-components-step-1'],
+                            "ga4/src/main.tsx": ['frontend-components-step-1'],
+                            "gtm/src/App.tsx": ['frontend-components-step-1'],
+                            "ga4/src/App.tsx": ['frontend-components-step-1'],
+                            "components/AppShell.tsx": ['frontend-components-step-2'],
+                            "components/AuthPage.tsx": ['frontend-components-step-2'],
+                            "context/AuthContext.tsx": ['frontend-components-step-2'],
+                            "components/Toast.tsx": ['frontend-components-step-2'],
+                            "components/ModelSelector.tsx": ['frontend-components-step-2'],
+                            "components/Dashboard.tsx": ['frontend-components-step-3'],
+                            "components/ChatOutline.tsx": ['frontend-components-step-3'],
+                            "components/AuthMedia.tsx": ['frontend-components-step-4'],
+                            "components/Sidebar.tsx": ['frontend-components-step-5'],
+                            "components/Ga4Settings.tsx": ['frontend-components-step-5'],
+                            "components/InviteKeyPanel.tsx": ['frontend-components-step-5'],
+                            "services/authApi.ts": ['frontend-components-step-1'],
+                            "services/chatApi.ts": ['frontend-components-step-1'],
+                            "utils/clean-json.ts": ['frontend-components-step-6'],
+                            "utils/gtm-minifier.ts": ['frontend-components-step-6']
                         }
                     },
-                    // Frontend Service Layer
                     {
                         containerSelector: '#frontend-services-diagram .mermaid svg',
                         nodeType: 'node',
                         mapping: {
-                            "bootstrap()":             ['frontend-services-step-2'],
-                            "signup()":                ['frontend-services-step-2'],
-                            "login()":                 ['frontend-services-step-2'],
-                            "logout()":                ['frontend-services-step-2'],
-                            "getMe()":                 ['frontend-services-step-2'],
-                            "generateInviteKey()":     ['frontend-services-step-2'],
-                            "getInviteKeys()":         ['frontend-services-step-2'],
-                            "getSessions()":           ['frontend-services-step-3'],
-                            "createSession()":         ['frontend-services-step-3'],
-                            "renameSession()":         ['frontend-services-step-3'],
-                            "deleteSession()":         ['frontend-services-step-3'],
-                            "getMessages()":           ['frontend-services-step-3'],
-                            "sendMessageStream() (GTM SSE + GA4 JSON)": ['frontend-services-step-4'],
-                            "setSessionGa4Property()": ['frontend-services-step-5'],
-                            "getGa4OAuthStatus()":     ['frontend-services-step-5'],
-                            "disconnectGa4OAuth()":    ['frontend-services-step-5'],
-                            "getGa4Properties()":      ['frontend-services-step-5']
+                            "authApi.ts": ['frontend-services-step-1', 'frontend-services-step-2'],
+                            "chatApi.ts": ['frontend-services-step-1'],
+                            "bootstrap()": ['frontend-services-step-2'],
+                            "signup()": ['frontend-services-step-2'],
+                            "login()": ['frontend-services-step-2'],
+                            "logout()": ['frontend-services-step-2'],
+                            "getMe()": ['frontend-services-step-2'],
+                            "generateInviteKey()": ['frontend-services-step-2'],
+                            "getInviteKeys()": ['frontend-services-step-2'],
+                            "getSessions()": ['frontend-services-step-3'],
+                            "createSession()": ['frontend-services-step-3'],
+                            "renameSession()": ['frontend-services-step-3'],
+                            "deleteSession()": ['frontend-services-step-3'],
+                            "getMessages()": ['frontend-services-step-3'],
+                            "getModels()": ['frontend-services-step-3'],
+                            "sendMessageStream() (SSE + JSON + AbortSignal)": ['frontend-services-step-4'],
+                            "uploadFiles() · fetchFileBlob() · deleteFile()": ['frontend-services-step-5'],
+                            "getGa4OAuthUrl() · status · disconnect": ['frontend-services-step-6'],
+                            "getGa4Properties() · setSessionGa4Property()": ['frontend-services-step-6']
                         }
                     },
-                    // Backend API Routes
                     {
                         containerSelector: '#backend-diagram .mermaid svg',
                         nodeType: 'node',
                         mapping: {
-                            "Worker fetch handler":    ['backend-step-1'],
-                            "CORS Preflight (OPTIONS)": ['backend-step-1'],
-                            "/api/auth/bootstrap — POST": ['backend-step-2'],
-                            "/api/auth/signup — POST": ['backend-step-2'],
-                            "/api/auth/login — POST":  ['backend-step-2'],
-                            "/api/auth/logout — POST": ['backend-step-2'],
-                            "/api/auth/me — GET 🔒":   ['backend-step-2'],
-                            "/api/auth/invite — POST 🔒": ['backend-step-2'],
-                            "/api/auth/invite-keys — GET 🔒": ['backend-step-2'],
-                            "GET /api/sessions":       ['backend-step-3'],
-                            "POST /api/sessions":      ['backend-step-3'],
-                            "PATCH /api/sessions/:id": ['backend-step-3'],
-                            "DELETE /api/sessions/:id": ['backend-step-3'],
-                            "GET /api/sessions/:id/messages": ['backend-step-3'],
-                            "PUT /api/sessions/:id/property": ['backend-step-3'],
-                            "POST /api/chat - chatMode gtm or ga4": ['backend-step-4'],
-                            "D1: auth_tokens + users": ['backend-step-3'],
-                            "/api/ga4/oauth/authorize — GET": ['backend-step-5'],
-                            "/api/ga4/oauth/callback — GET": ['backend-step-5'],
-                            "/api/ga4/oauth/status — GET 🔒": ['backend-step-5'],
-                            "/api/ga4/oauth/disconnect — POST 🔒": ['backend-step-5'],
-                            "/api/ga4/properties — GET 🔒": ['backend-step-5']
+                            "worker/index.ts OR server/src/index.ts": ['backend-step-1'],
+                            "Origin-Allowlisted CORS + Rate Limiter": ['backend-step-2'],
+                            "/api/auth/bootstrap — POST": ['backend-step-3'],
+                            "/api/auth/signup — POST": ['backend-step-3'],
+                            "/api/auth/login — POST": ['backend-step-3'],
+                            "/api/auth/logout — POST": ['backend-step-3'],
+                            "/api/auth/me — GET 🔒": ['backend-step-3'],
+                            "/api/auth/invite — POST 🔒": ['backend-step-3'],
+                            "/api/auth/invite-keys — GET 🔒": ['backend-step-3'],
+                            "DB: auth_tokens JOIN users": ['backend-step-4'],
+                            "GET/POST /api/sessions · PATCH/DELETE /api/sessions/:id": ['backend-step-5'],
+                            "GET /api/sessions/:id/messages · PUT /property": ['backend-step-5'],
+                            "POST /api/chat (gtm SSE | ga4 JSON)": ['backend-step-5'],
+                            "GET /api/models (30m cached)": ['backend-step-5'],
+                            "POST /api/files/upload · GET/DELETE /api/files/:id": ['backend-step-5'],
+                            "GET /api/ga4/oauth/authorize 🔒": ['backend-step-6'],
+                            "GET /api/ga4/oauth/callback (HMAC state)": ['backend-step-6'],
+                            "GET /api/ga4/oauth/status 🔒": ['backend-step-6'],
+                            "POST /api/ga4/oauth/disconnect 🔒": ['backend-step-6'],
+                            "GET /api/ga4/properties 🔒": ['backend-step-6'],
+                            "Worker scheduled() Cron · Cloud Run /healthz": ['backend-step-6']
                         }
                     },
-                    // Database ER Diagram
                     {
                         containerSelector: '#database-diagram .mermaid svg',
-                        nodeType: 'entity',  // ER diagram entities
+                        nodeType: 'entity',
                         mapping: {
-                            "users":                   ['database-step-1'],
-                            "auth_tokens":             ['database-step-2'],
-                            "invite_keys":             ['database-step-3'],
-                            "sessions":                ['database-step-4'],
-                            "messages":                ['database-step-5'],
-                            "ga4_oauth_tokens":        ['database-step-6']
+                            "users": ['database-step-1'],
+                            "auth_tokens": ['database-step-2'],
+                            "invite_keys": ['database-step-3'],
+                            "sessions": ['database-step-4'],
+                            "messages": ['database-step-5'],
+                            "ga4_oauth_tokens": ['database-step-6'],
+                            "attachments": ['database-step-7']
                         }
                     },
-                    // Infrastructure Topology
                     {
                         containerSelector: '#infra-topology-diagram .mermaid svg',
                         nodeType: 'node',
                         mapping: {
-                            "Vite GTM (:5173)":        ['infra-topology-step-1'],
-                            "Vite GA4 (:5174)":        ['infra-topology-step-1'],
-                            "Wrangler Dev (:8787)":    ['infra-topology-step-1'],
-                            "apps/gtm/vite.config.ts": ['infra-topology-step-2'],
-                            "apps/ga4/vite.config.ts": ['infra-topology-step-2'],
-                            "wrangler.toml (root)":    ['infra-topology-step-2'],
-                            "brighthorizon-gtm.pages.dev":   ['infra-topology-step-3'],
-                            "brighthorizon-ga4.pages.dev":   ['infra-topology-step-3'],
-                            "gtm-auditor-server (Worker)": ['infra-topology-step-3'],
-                            ".env / .env.production":  ['infra-topology-step-4'],
-                            "D1: gtm_chat_history":    ['infra-topology-step-5'],
-                            "KV: GTM_CONTAINER":       ['infra-topology-step-5']
+                            "Vite GTM (:5173)": ['infra-topology-step-1'],
+                            "Vite GA4 (:5174)": ['infra-topology-step-1'],
+                            "Wrangler Dev (:8787)": ['infra-topology-step-1'],
+                            "Hono Node Server (:8787)": ['infra-topology-step-1'],
+                            "brighthorizon-gtm.pages.dev": ['infra-topology-step-2'],
+                            "brighthorizon-ga4.pages.dev": ['infra-topology-step-2'],
+                            "gtm-auditor-server (Worker + Cron)": ['infra-topology-step-2'],
+                            "D1: gtm_chat_history": ['infra-topology-step-2'],
+                            "KV: GTM_CONTAINER": ['infra-topology-step-2'],
+                            "R2: CHAT_FILES": ['infra-topology-step-2'],
+                            "Cloud Run (Dockerfile / Node 22)": ['infra-topology-step-3'],
+                            "Cloud SQL Postgres": ['infra-topology-step-3'],
+                            "GCS Container Bucket": ['infra-topology-step-3'],
+                            "GCS Files Bucket": ['infra-topology-step-3'],
+                            "wrangler.toml / .example": ['infra-topology-step-4'],
+                            "Dockerfile + .dockerignore": ['infra-topology-step-3'],
+                            "server/.env / .env.example": ['infra-topology-step-4'],
+                            "schema.sql + schema-postgres.sql": ['infra-topology-step-4']
                         }
                     },
-                    // File-Level Dependency Graph
                     {
                         containerSelector: '#infra-files-diagram .mermaid svg',
                         nodeType: 'node',
                         mapping: {
-                            "package.json":            ['infra-files-step-1'],
-                            "pnpm-workspace.yaml":     ['infra-files-step-1'],
-                            "gtm/src/App.tsx":         ['infra-files-step-2'],
-                            "ga4/src/App.tsx":         ['infra-files-step-2'],
-                            "index.ts (Entry)":        ['infra-files-step-3'],
-                            "services/gtm-chat.ts":    ['infra-files-step-4'],
-                            "services/ga4/chat.ts":    ['infra-files-step-4'],
-                            "services/ga4/api.ts":     ['infra-files-step-4'],
-                            "services/ga4/tools/charts.ts": ['infra-files-step-4'],
-                            "middleware/auth.ts":      ['infra-files-step-5'],
-                            "wrangler.toml":           ['infra-files-step-6'],
-                            "schema.sql":              ['infra-files-step-6']
+                            "gtm/src/App.tsx": ['infra-files-step-1'],
+                            "ga4/src/App.tsx": ['infra-files-step-1'],
+                            "components/AppShell.tsx": ['infra-files-step-1'],
+                            "components/Dashboard.tsx": ['infra-files-step-1'],
+                            "components/Sidebar.tsx": ['infra-files-step-1'],
+                            "components/AuthMedia.tsx": ['infra-files-step-1'],
+                            "components/AuthPage.tsx": ['infra-files-step-1'],
+                            "worker/index.ts": ['infra-files-step-2'],
+                            "routes/auth.ts": ['infra-files-step-2'],
+                            "routes/sessions.ts": ['infra-files-step-2'],
+                            "routes/chat.ts": ['infra-files-step-2'],
+                            "routes/files.ts": ['infra-files-step-2'],
+                            "routes/models.ts": ['infra-files-step-2'],
+                            "routes/ga4-oauth.ts": ['infra-files-step-2'],
+                            "services/gemini-chat.ts": ['infra-files-step-3'],
+                            "services/ga4/api.ts": ['infra-files-step-3'],
+                            "services/ga4/oauth.ts": ['infra-files-step-3'],
+                            "services/ga4/tools/charts.ts": ['infra-files-step-3'],
+                            "utils/crypto.ts": ['infra-files-step-4'],
+                            "utils/file-helpers.ts": ['infra-files-step-4'],
+                            "utils/rate-limit.ts": ['infra-files-step-4'],
+                            "server/src/index.ts": ['infra-files-step-5'],
+                            "env.ts · db.ts · kv.ts · r2.ts": ['infra-files-step-5'],
+                            "tests/*.test.ts (15 unit tests)": ['infra-files-step-5']
                         }
                     }
-                    // Sequence diagrams not included for simplicity,
-                    // but could be added with participant labels and step arrays.
                 ];
 
-                // Helper to find nodes by label text
                 function findNodesByText(svgElement, nodeType, text) {
                     var elems = svgElement.querySelectorAll('g.' + nodeType);
                     var result = [];
@@ -1560,10 +1583,9 @@ graph TD
                     return result;
                 }
 
-                // Attach events to a node
                 function attachNodeEvents(nodeGroup, stepIds) {
                     if (!stepIds || stepIds.length === 0) return;
-                    
+
                     function highlightSteps() {
                         stepIds.forEach(function(id) {
                             var stepEl = document.getElementById(id);
@@ -1581,22 +1603,18 @@ graph TD
                             var stepEl = document.getElementById(stepIds[0]);
                             if (stepEl) {
                                 stepEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                                // Flash effect stays a little longer
                                 highlightSteps();
                                 setTimeout(unhighlightSteps, 1500);
                             }
                         }
                     }
 
-                    // Make node look interactive
                     nodeGroup.style.cursor = 'pointer';
-                    
                     nodeGroup.addEventListener('mouseenter', highlightSteps);
                     nodeGroup.addEventListener('mouseleave', unhighlightSteps);
                     nodeGroup.addEventListener('click', scrollToFirstStep);
                 }
 
-                // Process each mapping
                 diagramMappings.forEach(function(item) {
                     var svg = document.querySelector(item.containerSelector);
                     if (!svg) return;
@@ -1609,8 +1627,6 @@ graph TD
                         });
                     });
                 });
-
-                console.log('Interactive diagram links activated.');
             }, 200);
         });
     </script>

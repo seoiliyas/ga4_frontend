@@ -41,7 +41,7 @@ export function createAuthApi(app: 'gtm' | 'ga4') {
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
       'X-BrightHorizon-App': app,
-      ...(opts?.headers as Record<string, string> ?? {}),
+      ...((opts?.headers as Record<string, string>) ?? {}),
     };
 
     if (includeAuth) {
@@ -63,7 +63,7 @@ export function createAuthApi(app: 'gtm' | 'ga4') {
     getToken,
     setToken,
     clearToken,
-    
+
     bootstrap(username: string, email: string, password: string) {
       return authFetch<{ token: string; user: AuthUser }>('/api/auth/bootstrap', {
         method: 'POST',
@@ -102,3 +102,5 @@ export function createAuthApi(app: 'gtm' | 'ga4') {
     },
   };
 }
+
+export type AuthApi = ReturnType<typeof createAuthApi>;

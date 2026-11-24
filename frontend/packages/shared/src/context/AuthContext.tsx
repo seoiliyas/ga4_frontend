@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import type { AuthUser } from '../services/authApi';
+import type { AuthApi, AuthUser } from '../services/authApi';
 
 export interface AuthContextValue {
   user: AuthUser | null;
@@ -21,14 +21,13 @@ export function useAuth(): AuthContextValue {
 
 interface AuthProviderProps {
   children: React.ReactNode;
-  authApi: any; // Factory created authApi
+  authApi: AuthApi;
 }
 
 export function AuthProvider({ children, authApi }: AuthProviderProps) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Check existing token on mount
   useEffect(() => {
     const token = authApi.getToken();
     if (!token) {
@@ -40,16 +39,19 @@ export function AuthProvider({ children, authApi }: AuthProviderProps) {
       .getMe()
       .then(({ user }: { user: AuthUser }) => setUser(user))
       .catch(() => {
-        authApi.clearToken(); // token is invalid/expired
+        authApi.clearToken();
       })
       .finally(() => setIsLoading(false));
   }, [authApi]);
 
-  const login = useCallback(async (email: string, password: string) => {
-    const { token, user } = await authApi.login(email, password);
-    authApi.setToken(token);
-    setUser(user);
-  }, [authApi]);
+  const login = useCallback(
+    async (email: string, password: string) => {
+      const { token, user } = await authApi.login(email, password);
+      authApi.setToken(token);
+      setUser(user);
+    },
+    [authApi],
+  );
 
   const signup = useCallback(
     async (username: string, email: string, password: string, inviteKey: string) => {

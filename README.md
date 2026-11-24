@@ -1,252 +1,362 @@
-# GTM Auditor — AI-Powered Container & Analytics Analysis
+# BrightHorizon GTM & GA4 Auditor — AI-Powered Container & Analytics Suite
 
-An intelligent dual-mode chat interface for auditing **Google Tag Manager containers** and querying **Google Analytics 4 data**, powered by **Google Gemini** and deployed on **Cloudflare's serverless stack**.
+An intelligent dual-app monorepo for auditing **Google Tag Manager containers** (`@brighthorizon/gtm`) and querying **Google Analytics 4 properties** (`@brighthorizon/ga4`), powered by **Google Gemini** (Vertex AI) and deployable on either **Cloudflare Workers** or **Google Cloud Run**.
 
-[![Cloudflare Workers](https://img.shields.io/badge/Cloudflare-Workers-F38020?logo=cloudflare&logoColor=white)](https://workers.cloudflare.com/)
-[![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=white)](https://react.dev/)
-[![Gemini](https://img.shields.io/badge/Google-Gemini_3.1_Pro-4285F4?logo=google&logoColor=white)](https://ai.google.dev/)
+[![React](https://img.shields.io/badge/React-19.2-61DAFB?logo=react&logoColor=white)](https://react.dev/)
+[![Vite](https://img.shields.io/badge/Vite-6.4-646CFF?logo=vite&logoColor=white)](https://vite.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.8-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
-[![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-4.1-06B6D4?logo=tailwindcss&logoColor=white)](https://tailwindcss.com/)
-
-[Live Demo →](https://gtm-auditor-5ks.pages.dev/) · [API Endpoint →](https://gtm-auditor-server.iammsk.workers.dev)
+[![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-4.2-06B6D4?logo=tailwindcss&logoColor=white)](https://tailwindcss.com/)
+[![Cloudflare Workers](https://img.shields.io/badge/Cloudflare-Workers-F38020?logo=cloudflare&logoColor=white)](https://workers.cloudflare.com/)
+[![Google Cloud Run](https://img.shields.io/badge/Google_Cloud-Run-4285F4?logo=googlecloud&logoColor=white)](https://cloud.google.com/run)
+[![Vertex AI Gemini](https://img.shields.io/badge/Vertex_AI-Gemini_2.5-4285F4?logo=google&logoColor=white)](https://cloud.google.com/vertex-ai)
 
 ---
 
-## What is GTM Auditor?
+## What is BrightHorizon Auditor?
 
-GTM containers can grow to **thousands of lines of JSON** with hundreds of tags, triggers, and variables — making manual audits slow and error-prone. GA4 properties accumulate complex event configurations, custom dimensions, and campaign data that require deep analytical querying. GTM Auditor addresses both challenges in a single unified interface.
+GTM containers often grow to tens of thousands of lines of JSON across hundreds of tags, triggers, and variables, while GA4 properties accumulate complex event schemas, custom dimensions, and conversion funnels. BrightHorizon solves both in a shared-core pnpm monorepo with two purpose-built frontend SPAs backed by one unified API layer.
 
-### Two Modes, One Platform
+### Two Standalone Apps, One Shared Engine
 
-| Mode | How It Works | Powered By |
-|------|-------------|------------|
-| **GTM Mode** | Loads your entire GTM container JSON into Gemini as persistent context. Ask natural-language questions and get instant, accurate answers about any tag, trigger, or variable. | Gemini context caching + SSE streaming |
-| **GA4 Mode** | Connects to your GA4 property via service account. Gemini uses **function calling** to autonomously query the GA4 Data & Admin APIs, then analyzes and explains the results. | Gemini function calling + GA4 REST APIs |
-
-### The Problem → Solution
-
-| Problem | Solution |
-|---------|----------|
-| GTM containers have 100+ tags with thousands of lines of JSON — auditing manually is slow | AI has the full container pre-loaded and can instantly answer about any tag, trigger, or variable |
-| Container exports are difficult for non-technical stakeholders | The LLM translates raw JSON into plain-English explanations |
-| Auditing requires exporting → reading → cross-referencing trigger IDs → checking consent one by one | Just ask *"Are there any missing consent settings?"* and get a structured answer |
-| GA4 data queries require navigating complex UIs and building API requests manually | Just ask *"What were the top landing pages last month?"* and Gemini fetches the data for you |
-| Understanding GA4 funnel performance requires multiple report configurations | Ask *"Show me the checkout funnel drop-off rates"* and get an instant analysis |
+| App | Package | How It Works | Powered By |
+|-----|---------|-------------|------------|
+| **GTM Auditor (`:5173`)** | `@brighthorizon/gtm` | Loads your minified GTM container into a Gemini Context Cache and streams deep container audits over SSE. | Vertex AI Gemini Context Cache (`3600s` TTL) + SSE |
+| **GA4 Analyst (`:5174`)** | `@brighthorizon/ga4` | Connects per-user via Google OAuth 2.0; Gemini uses parallel function calling against live GA4 APIs and generates private Chart.js v4 charts. | Vertex AI Function Calling + GA4 Data/Admin APIs + QuickChart v4 |
 
 ### Example Questions You Can Ask
 
 **GTM Mode:**
-- *"What tags fire on the page load event?"*
-- *"Show me all variables that reference cookies"*
 - *"Are there any tags with missing consent settings?"*
-- *"Summarize the overall health of this container"*
-- *"Which triggers use custom JavaScript conditions?"*
+- *"Show me all triggers that fire on pageview"*
+- *"Summarize the overall health and test artifacts in this container"*
+- *"Which variables reference cookies or custom JavaScript?"*
 
 **GA4 Mode:**
-- *"What are the top 10 events by count in the last 30 days?"*
-- *"Show me active users right now (realtime)"*
-- *"What's the bounce rate by device category this month?"*
+- *"What are my top 10 events in the last 30 days?"*
+- *"Show me daily active users for the past week as a line chart"*
+- *"Show me the checkout funnel from `page_view` → `begin_checkout` → `purchase`"*
 - *"List all custom dimensions and metrics configured on this property"*
-- *"Show me the checkout funnel from page_view → begin_checkout → purchase"*
-- *"Which campaigns drove the most conversions last quarter?"*
 
 ---
 
 ## Features
 
-### Core
-- **Dual-Mode Interface** — Seamlessly switch between GTM container analysis and GA4 live data querying with a one-click mode toggle in the header
-- **AI-Powered Analysis** — Google Gemini 3.1 Pro with full container context (GTM) or live API function calling (GA4)
-- **Real-Time Streaming** — GTM responses stream via SSE with a live typing indicator; GA4 responses use simulated streaming for smooth UX
-- **Persistent Chat History** — Conversations stored in Cloudflare D1 (SQLite), securely scoped to individual user accounts and separated by mode
-- **Session Management** — Create, rename, delete, and resume chat sessions (separate session lists per mode)
-- **Smart Date Grouping** — Sessions organized by Today, Yesterday, This Week, Earlier
-- **Markdown Rendering** — AI responses rendered as rich Markdown with code blocks, tables, and lists
-- **Auto-Titling** — New chats are automatically titled based on the first question
+### Core Platform & UX
+- **Two Dedicated Apps, Zero UI Duplication**: `@brighthorizon/gtm` and `@brighthorizon/ga4` are thin wrappers around `AppShell` and `AuthPage` in `@brighthorizon/shared`, with mode-specific themes (`#1a3a5c` navy for GTM, `#e8710a` orange for GA4) and app-scoped accounts (`app IN ('gtm', 'ga4')`).
+- **Model Selector**: Dynamically discovers Vertex AI Gemini models via `GET /api/models` (cached 30 min in memory) with curated defaults (`gemini-2.5-flash`, `gemini-2.5-pro`, `gemini-2.5-flash-lite`, `gemini-2.0-flash`).
+- **Auto-Resizing Composer & Stop Generation**: Multi-line `<textarea>` (`Enter` sends, `Shift+Enter` inserts newline) paired with an `AbortController` **Stop** button to cancel in-flight requests cleanly.
+- **Rich Markdown & Severity Cards**: `@tailwindcss/typography` + `react-markdown` + `remark-gfm` + `remark-breaks` render tables with one-click copy-to-clipboard, code blocks, and severity cards (`Critical`, `High`, `Medium`, `Low`).
+- **Smart Session Management**: Persistent per-user, per-mode sessions grouped by `Today`, `Yesterday`, `This Week`, and `Earlier`, auto-titled after the first reply, plus a hoverable `ChatOutline` navigator.
 
-### GTM-Specific
-- **Context Caching** — Gemini context cache avoids re-sending ~771KB of container data on every request (TTL: 30 min)
-- **GTM Container Minification** — Reduces raw 1.6MB container JSON to ~353KB (78% reduction) with human-readable variable and trigger resolution
-- **SSE Streaming** — True server-sent events for real-time token-by-token response delivery
+### GTM Mode
+- **Lossless Operator-Preserving Minification (`gtm-minifier.ts`)**: Reduces large GTM container exports while resolving `{{_u:ID}}` variable references, firing/blocking trigger names, custom template IDs, condition operators (`contains`, `equals`, `matches regex`, `matches CSS selector`, `starts with`, etc.), `negate` flags (`does not ...`), and `ignore_case`.
+- **Model + Hash Scoped Context Caching**: Keys Gemini context caches in KV/GCS by `${KV_CACHE_KEY}:${model}:${sha256(container)}` (1-hour TTL) with automatic fallback to inline system instructions.
+- **True SSE Streaming**: Token-by-token streaming with disconnect-safe writers and post-stream persistence.
 
-### GA4-Specific
-- **Service Account Authentication** — Secure JWT-based OAuth 2.0 with RS256 signing, fully implemented in the Worker using Web Crypto API (no external auth libraries)
-- **Gemini Function Calling** — 7 tool declarations allow Gemini to autonomously fetch GA4 data before answering
-- **GA4 Data API Integration** — Run standard reports, realtime reports, and funnel reports
-- **GA4 Admin API Integration** — Retrieve account summaries, property details, custom dimensions/metrics, and Google Ads links
-- **Per-User Property Configuration** — Each user can configure their own GA4 property ID, stored in Cloudflare KV
-- **Access Token Caching** — Service account access tokens are cached in-memory with automatic refresh
+### GA4 Mode
+- **Per-User Google OAuth 2.0**: Requests `analytics.readonly` + `userinfo.email` scopes with HMAC-SHA256 signed `state` (10-minute TTL), AES-GCM encrypted tokens at rest, and automatic refresh-token rotation/expiry detection (`GA4_TOKEN_EXPIRED`).
+- **Parallel Tool Calling (8 Tools)**: Executes multiple simultaneous Gemini tool calls in parallel (`Promise.all`) up to 20 turns, filtering internal Gemini `thought` reasoning traces before returning final answers.
+- **Private Chart.js v4 Persistence**: Renders Chart.js v4 visualizations via QuickChart POST API, stores PNGs privately inside `CHAT_FILES` (R2 or GCS) at `/api/files/:id`, and persists chart URLs in `messages.charts` so charts survive page reloads.
 
-### Security & Auth
-- **Secure Invite-Only Access** — Robust authentication system utilizing Web Crypto API for secure PBKDF2 password hashing (100K iterations, SHA-256) and unique single-use invitation keys
-- **"Bright Horizons" Aesthetics** — A clean, light-themed responsive design featuring a white card-based layout and modern typography
+### Multimodal File Attachments
+- **Upload via Picker, Drag-and-Drop, or Paste**: Up to 10 files / 25MB per file stored in R2 (Workers) or GCS (Cloud Run).
+- **Rich Extraction & Authenticated Viewing**: Supports images (PNG/JPEG/GIF/WebP), PDFs, CSV/JSON/TXT/MD/HTML/SVG, and zero-dependency OOXML extraction (`DecompressionStream`) for `.docx` and `.xlsx`/`.xlsm`. Protected files and charts render in-app via authenticated Blob fetches (`AuthImage` / `openAuthenticatedFile`).
+
+### Security
+- **Bearer-Only Authentication**: Rejects `?token=` URL parameters; accepts `Authorization: Bearer <token>` only.
+- **PBKDF2-SHA256 + Constant-Time Compare**: 100,000-iteration salted password hashing with `timingSafeEqual` verification.
+- **Atomic Invite-Only Access**: Bootstrap creates the first account; subsequent signups require a single-use, app-scoped `INV-...` key redeemed atomically in a DB transaction.
+- **Hardened Endpoints**: Per-IP auth rate limiting, per-user chat rate limiting, origin-allowlisted CORS (`ALLOWED_ORIGINS`), HTML-escaped OAuth result pages with origin-scoped `postMessage`, sandboxed file serving (`Content-Security-Policy: sandbox`, `X-Content-Type-Options: nosniff`, `Cache-Control: private`, inline MIME allowlist), and scheduled expired-token cleanup.
 
 ---
 
 ## Architecture
 
-```
-User → React SPA → fetch() → Cloudflare Worker → {KV, D1, Gemini, GA4 APIs} → SSE/JSON → React → Rendered Markdown
-```
+### Dual-Runtime High-Level Flow
 
 ```mermaid
-graph TD
-    subgraph "User's Browser"
-        A["React SPA<br/>(Vite + Tailwind)"]
+graph TB
+    subgraph Client["Frontend SPAs (React 19 + Vite 6 + Tailwind v4)"]
+        GTM["@brighthorizon/gtm (:5173)"]
+        GA4["@brighthorizon/ga4 (:5174)"]
+        Shared["@brighthorizon/shared (AppShell, AuthPage, Dashboard, AuthMedia)"]
+        GTM --> Shared
+        GA4 --> Shared
     end
 
-    subgraph "Cloudflare Edge Network"
-        B["Cloudflare Worker<br/>(worker.ts)"]
-        C["Cloudflare D1<br/>(SQLite)"]
-        D["Cloudflare KV<br/>(Key-Value Store)"]
+    subgraph Runtime["API Layer (Shared worker/ Handlers)"]
+        CF["Cloudflare Worker<br/>worker/index.ts + Cron"]
+        CR["GCP Cloud Run (Node 22 + Hono)<br/>server/src/index.ts"]
+        Adapters["Cloud Run Shims<br/>db.ts (pg) · kv.ts (GCS) · r2.ts (GCS)"]
+        CR --> Adapters
     end
 
-    subgraph "Google Cloud"
-        E["Gemini API<br/>(gemini-3.1-pro-preview)"]
-        F["Gemini Context Cache"]
-        G["GA4 Data API"]
-        H["GA4 Admin API"]
+    subgraph Storage["Storage Backends"]
+        D1["Cloudflare D1 / Cloud SQL Postgres<br/>(7 tables)"]
+        KV["Cloudflare KV / GCS Container Bucket<br/>(GTM container + cache names)"]
+        R2["Cloudflare R2 / GCS Files Bucket<br/>(Attachments + private GA4 charts)"]
     end
 
-    A -->|"REST API + SSE"| B
-    B -->|"SQL queries"| C
-    B -->|"get/put"| D
-    B -->|"generateContentStream<br/>(GTM mode)"| E
-    B -->|"generateContent<br/>+ function calling<br/>(GA4 mode)"| E
-    B -->|"caches.create / get"| F
-    B -->|"runReport /<br/>runRealtimeReport /<br/>runFunnelReport"| G
-    B -->|"accountSummaries /<br/>properties / customDimensions"| H
-    D -.->|"stores cache name +<br/>GA4 property IDs"| F
+    subgraph Google["Google & External Services"]
+        Gemini["Vertex AI Gemini<br/>(@google/genai — 2.5 Flash/Pro)"]
+        OAuth["Google OAuth 2.0<br/>(analytics.readonly + userinfo.email)"]
+        GA4API["GA4 Data API + Admin API"]
+        QC["QuickChart.io (Chart.js v4)"]
+    end
+
+    Shared -->|"REST + SSE (Bearer Auth)"| CF
+    Shared -->|"REST + SSE (Bearer Auth)"| CR
+    CF --> D1
+    CF --> KV
+    CF --> R2
+    Adapters --> D1
+    Adapters --> KV
+    Adapters --> R2
+    Runtime -->|"Context Cache + Stream / Tool Loop"| Gemini
+    Runtime -->|"HMAC State + Token Exchange"| OAuth
+    Runtime -->|"runReport / funnel / admin"| GA4API
+    Runtime -->|"POST /chart -> PNG -> R2/GCS"| QC
 ```
 
-### How a GTM Chat Message Flows
-
-1. User types a question in the React frontend (GTM mode)
-2. Frontend sends `POST /api/chat` with `{ sessionId, question, mode: "gtm" }` (authenticated via Bearer token)
-3. Worker authenticates the user via token lookup in D1
-4. Worker fetches the GTM container from **KV** and conversation history from **D1** for the session
-5. Worker gets or creates a **Gemini Context Cache** (TTL: 30 min, avoids re-sending the container)
-6. Worker calls `generateContentStream()` and pipes chunks as **SSE events**
-7. Frontend parses each SSE chunk and appends it to the message in real-time
-8. Once streaming completes, the worker **persists both messages to D1** in a batch
-
-### How a GA4 Chat Message Flows
-
-1. User types a question in the React frontend (GA4 mode)
-2. Frontend sends `POST /api/chat` with `{ sessionId, question, mode: "ga4", ga4PropertyId }` (authenticated via Bearer token)
-3. Worker authenticates the user and resolves the GA4 property ID (from request body or per-user KV)
-4. Worker obtains a **service account access token** (JWT → OAuth2 token exchange, cached in-memory)
-5. Worker calls `generateContent()` with 7 GA4 function declarations as tools
-6. Gemini responds with **function calls** — the Worker executes them against the GA4 APIs
-7. Function results are fed back to Gemini, which may issue further function calls (up to 6 tool turns)
-8. Once Gemini produces a text response, Worker returns it as JSON
-9. Frontend simulates streaming for smooth UX, then **persists both messages to D1**
+See [architecture_detailed.html](file:///c:/Users/FlameBreather/OneDrive/Desktop/Projects/A2ZDM/Final%20GTM%20GA4%20Project/GTM-GA4-Auditor/architecture_detailed.html) for interactive diagrams and step-by-step walkthroughs, or [architecture_graph.html](file:///c:/Users/FlameBreather/OneDrive/Desktop/Projects/A2ZDM/Final%20GTM%20GA4%20Project/GTM-GA4-Auditor/architecture_graph.html) for standalone Mermaid diagrams.
 
 ---
 
-## GA4 Function Calling — Tool Declarations
+## Monorepo Structure
 
-The Worker registers 7 tools with Gemini for GA4 mode. Gemini autonomously selects which tools to use based on the user's question:
-
-| Tool | Description | API |
-|------|-------------|-----|
-| `get_account_summaries` | Discover available GA4 accounts and properties | Admin API |
-| `get_property_details` | Property name, create time, industry, timezone, currency | Admin API |
-| `list_google_ads_links` | Google Ads account links for a property | Admin API |
-| `run_report` | Standard analytics report — events, users, sessions, conversions, revenue, etc. | Data API |
-| `run_realtime_report` | Realtime data for the last 30 minutes | Data API |
-| `run_funnel_report` | Funnel analysis with step-by-step progression | Data API (v1alpha) |
-| `get_custom_dimensions_and_metrics` | Custom dimensions and metrics defined on a property | Admin API |
-
-**Multi-turn tool calling:** Gemini can make up to **6 sequential tool calls** per question, enabling complex queries like _"Compare this month's traffic to last month, broken down by source"_ — where Gemini issues multiple `run_report` calls with different date ranges.
-
----
-
-## Tech Stack
-
-### Frontend
-
-| Technology | Version | Purpose |
-|------------|---------|---------|
-| React | 19.0.0 | UI component library |
-| Vite | 6.2.0 | Build tool & dev server |
-| TypeScript | 5.8.2 | Type-safe JavaScript |
-| Tailwind CSS | 4.1.14 | Utility-first CSS framework (with `@tailwindcss/typography` plugin) |
-| react-markdown | 10.1.0 | Markdown rendering for AI responses |
-| lucide-react | 0.546.0 | Icon library |
-| motion | 12.23.24 | Animation library (Framer Motion successor) |
-| clsx + tailwind-merge | — | Conditional class merging utility |
-
-### Backend
-
-| Technology | Purpose |
-|------------|---------|
-| Cloudflare Workers | Serverless edge compute (entire backend in a single `worker.ts` file, ~1,078 lines) |
-| Cloudflare D1 | Serverless SQLite — users, auth tokens, invite keys, chat sessions & messages |
-| Cloudflare KV | Key-Value store — GTM container JSON, Gemini cache name, per-user GA4 property IDs |
-| @google/genai | 1.29.0 — Google Gemini SDK for streaming AI completions and function calling |
-| GA4 Data API | v1beta — Standard reports, realtime reports, funnel reports |
-| GA4 Admin API | v1beta — Account summaries, property details, custom dimensions, Google Ads links |
-| Web Crypto API | JWT signing (RS256) for service account authentication — zero external auth dependencies |
-| Wrangler | 4.82.2 — Cloudflare CLI for dev and deployment |
-
----
-
-## Project Structure
-
-```
-gtm-auditor_L/
-├── src/                          # Frontend source code
-│   ├── App.tsx                   # Root component — dual-mode state, session routing, mode switcher
-│   ├── main.tsx                  # React DOM entry point
-│   ├── index.css                 # Tailwind CSS entry with "Bright Horizons" theming
-│   ├── vite-env.d.ts             # Vite type declarations
-│   ├── Container/
-│   │   ├── GTM-*.json            # Raw GTM container export (1.6MB, 37K lines)
-│   │   └── container-minified.json # Minified container (353KB)
-│   ├── components/
-│   │   ├── AuthPage.tsx          # Login/signup page with tabbed interface
-│   │   ├── Dashboard.tsx         # Chat interface — messages, input, streaming (GTM & GA4)
-│   │   └── Sidebar.tsx           # Session list, invite key management, mode-filtered views
-│   ├── context/
-│   │   └── AuthContext.tsx        # React auth context provider
+```text
+GTM-GA4-Auditor/
+├── frontend/
+│   ├── apps/
+│   │   ├── gtm/                        # @brighthorizon/gtm SPA (port 5173)
+│   │   │   ├── src/
+│   │   │   │   ├── App.tsx             # Thin wrapper rendering <AppShell mode="gtm" />
+│   │   │   │   └── main.tsx
+│   │   │   ├── index.html
+│   │   │   ├── package.json
+│   │   │   ├── tsconfig.json
+│   │   │   └── vite.config.ts
+│   │   └── ga4/                        # @brighthorizon/ga4 SPA (port 5174)
+│   │       ├── src/
+│   │       │   ├── App.tsx             # Thin wrapper rendering <AppShell mode="ga4" />
+│   │       │   └── main.tsx
+│   │       ├── index.html
+│   │       ├── package.json
+│   │       ├── tsconfig.json
+│   │       └── vite.config.ts
+│   └── packages/
+│       └── shared/                     # @brighthorizon/shared workspace package
+│           ├── src/
+│           │   ├── components/
+│           │   │   ├── AppShell.tsx    # Shared app layout, session state & routing
+│           │   │   ├── AuthMedia.tsx   # AuthImage & openAuthenticatedFile (Blob fetch)
+│           │   │   ├── AuthPage.tsx    # Unified Login / Invite Signup / Bootstrap UI
+│           │   │   ├── ChatOutline.tsx # Hover turn navigator
+│           │   │   ├── Dashboard.tsx   # Chat stream, markdown, drag-drop, textarea + Stop
+│           │   │   ├── Ga4Settings.tsx # OAuth connection & GA4 property picker
+│           │   │   ├── InviteKeyPanel.tsx
+│           │   │   ├── ModelSelector.tsx
+│           │   │   ├── Sidebar.tsx
+│           │   │   └── Toast.tsx
+│           │   ├── context/AuthContext.tsx
+│           │   ├── services/{authApi,chatApi}.ts
+│           │   ├── utils/{clean-json,gtm-minifier}.ts
+│           │   ├── index.css           # Tailwind v4 + @tailwindcss/typography + custom theme
+│           │   ├── index.ts
+│           │   └── vite-env.d.ts
+│           ├── package.json
+│           └── tsconfig.json
+├── worker/                             # Core API handlers (Web-standard Request/Response)
+│   ├── index.ts                        # Cloudflare Worker fetch() + scheduled() cron
+│   ├── types.ts                        # Env bindings, AuthUser, constants
+│   ├── middleware/auth.ts              # Bearer authentication & expired token cleanup
+│   ├── routes/
+│   │   ├── auth.ts                     # Bootstrap, invite signup, login, logout, invite keys
+│   │   ├── chat.ts                     # GTM SSE + GA4 tool loop + message persistence
+│   │   ├── files.ts                    # Upload, list, sandboxed download, delete
+│   │   ├── ga4-oauth.ts                # Signed OAuth authorize/callback/status/properties
+│   │   ├── models.ts                   # Dynamic Vertex AI Gemini model list (30m cache)
+│   │   └── sessions.ts                 # Session CRUD, property binding, attachment cleanup
 │   ├── services/
-│   │   ├── authApi.ts            # Auth HTTP client — login, signup, bootstrap, invite
-│   │   └── chatApi.ts            # Chat HTTP client — sessions, messages, SSE stream parser,
-│   │                             #   GA4 property config, dual-mode sendMessageStream()
+│   │   ├── gemini-chat.ts              # Context caching, SSE streaming, parallel GA4 loop
+│   │   └── ga4/
+│   │       ├── api.ts                  # GA4 Data & Admin API tools + numeric validation
+│   │       ├── oauth.ts                # Token encryption/refresh & escaped HTML callback
+│   │       └── tools/charts.ts         # QuickChart v4 + private R2/GCS chart persistence
 │   └── utils/
-│       ├── clean-json.ts         # Strips control characters from JSON
-│       └── gtm-minifier.ts       # Minifies GTM container JSON (78% reduction)
-├── worker.ts                     # Cloudflare Worker — entire backend API (1,078 lines):
-│                                 #   Authentication, session CRUD, GTM chat (SSE streaming),
-│                                 #   GA4 chat (function calling), GA4 service account auth,
-│                                 #   GA4 REST API helpers, Gemini context cache management
-├── schema.sql                    # D1 database schema (users, tokens, invites, sessions, messages)
-│                                 #   with mode column, indexes, and email validation
-├── wrangler.toml                 # Cloudflare Worker configuration & bindings
-├── vite.config.ts                # Vite build configuration
-├── tsconfig.json                 # TypeScript compiler options
-├── index.html                    # Vite HTML template
-├── package.json                  # Dependencies & scripts
-├── metadata.json                 # App metadata
-├── get-minified.ts               # Standalone GTM container minification script (TypeScript)
-├── get-minified.js               # Standalone GTM container minification script (JavaScript)
-├── .env                          # Dev environment vars (GEMINI_API_KEY, VITE_WORKER_URL)
-├── .env.production               # Production environment vars
-└── dist/                         # Built output (CSS + JS bundles)
+│       ├── crypto.ts                   # PBKDF2, timingSafeEqual, AES-GCM, HMAC state
+│       ├── file-helpers.ts             # Base64, text & OOXML (.docx/.xlsx) extraction
+│       ├── genai-client.ts             # Vertex AI client (SA JSON or Cloud Run ADC)
+│       ├── http.ts                     # Origin-aware CORS & JSON helpers
+│       └── rate-limit.ts               # In-memory fixed-window rate limiter
+├── server/                             # @gtm-auditor/server (Cloud Run Node 22 + Hono)
+│   ├── src/
+│   │   ├── index.ts                    # Hono app, CORS, /healthz, /readyz, token cleanup
+│   │   ├── bootstrap.ts                # Auto-init Postgres schema, metadata project & GCS seed
+│   │   ├── env.ts                      # Singleton GCP adapters & credential/bucket resolution
+│   │   ├── db.ts                       # Postgres D1 shim (Cloud SQL socket, TCP, DATABASE_URL)
+│   │   ├── kv.ts                       # GCS KV shim (in-memory cache + local container fallback)
+│   │   └── r2.ts                       # GCS R2 shim (Readable.toWeb streaming)
+│   ├── .env.example
+│   ├── package.json
+│   └── tsconfig.json
+├── deploy/                             # Turnkey GCP Cloud Run + Cloud SQL + GCS scripts
+│   ├── cloudrun-setup.ps1              # PowerShell end-to-end provisioning & deploy
+│   └── cloudrun-setup.sh               # Bash / Cloud Shell provisioning & deploy
+├── tests/                              # Automated unit test suite (node:test)
+│   ├── crypto.test.ts
+│   ├── gtm-minifier.test.ts
+│   ├── server-bootstrap.test.ts
+│   └── worker-routes.test.ts
+├── data/                               # Raw & minified GTM container exports
+├── get-minified.ts                     # CLI GTM cleaner + minifier
+├── schema.sql                          # Cloudflare D1 (SQLite) schema (7 tables)
+├── schema-postgres.sql                 # Cloud SQL (Postgres) schema (7 tables)
+├── wrangler.toml.example               # Cloudflare Worker configuration template
+├── Dockerfile                          # Multi-stage self-bootstrapping Cloud Run container
+├── docker-entrypoint.sh                # Materializes SA JSON / ADC & supports --init-only
+├── docker-compose.yml                  # Local Postgres 16 + self-initializing server stack
+├── .dockerignore
+├── metadata.json
+├── pnpm-workspace.yaml
+└── package.json
 ```
 
 ---
 
-## Getting Started
+## API Reference
+
+All API endpoints are prefixed with `/api` (`POST`, `GET`, `PUT`, `PATCH`, `DELETE`). Protected routes require `Authorization: Bearer <token>`.
+
+### Authentication (`/api/auth/*`)
+
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| `POST` | `/api/auth/bootstrap` | No | Create the initial user when `users` is empty (rate limited) |
+| `POST` | `/api/auth/signup` | No | Register with an app-scoped single-use `INV-...` key (atomic claim) |
+| `POST` | `/api/auth/login` | No | Authenticate with email + password scoped by app (`gtm` \| `ga4`) |
+| `POST` | `/api/auth/logout` | Optional | Delete current auth token & purge expired tokens |
+| `GET` | `/api/auth/me` | Yes | Return authenticated user profile |
+| `POST` | `/api/auth/invite` | Yes | Generate a new single-use invite key scoped to the app |
+| `GET` | `/api/auth/invite-keys` | Yes | List invite keys created by the current user |
+
+### Sessions & Messages (`/api/sessions/*`)
+
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| `GET` | `/api/sessions?mode=gtm\|ga4` | Yes | List sessions for the current user and mode |
+| `POST` | `/api/sessions` | Yes | Create a new session (`{ id, title?, mode?, ga4_property_id? }`) |
+| `PATCH` | `/api/sessions/:id` | Yes | Rename a session (`{ title }`) |
+| `DELETE` | `/api/sessions/:id` | Yes | Delete a session, its messages, and all associated R2/GCS files |
+| `GET` | `/api/sessions/:id/messages` | Yes | Get ordered messages enriched with `charts` and `attachments` |
+| `PUT` | `/api/sessions/:id/property` | Yes | Set/clear numeric `ga4_property_id` on a session |
+
+### Chat & Models (`/api/chat`, `/api/models`)
+
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| `POST` | `/api/chat` | Yes | Send `{ question, sessionId?, chatMode?, model?, attachmentIds? }` (`30 req/min` per user) |
+| `GET` | `/api/models` | Yes | List available Gemini models (Vertex AI discovery cached 30 min + curated defaults) |
+
+- **GTM Mode (`chatMode: 'gtm'`)** returns `text/event-stream` SSE chunks: `data: {"text":"..."}` ending with `data: [DONE]`.
+- **GA4 Mode (`chatMode: 'ga4'`)** returns JSON: `{ "answer": "...", "charts": ["/api/files/chart-..."] }`.
+
+### Files & Attachments (`/api/files/*`)
+
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| `POST` | `/api/files/upload` | Yes | Upload up to 10 multipart files (25MB max each) for a session |
+| `GET` | `/api/files?sessionId=...` | Yes | List attachments for a session |
+| `GET` | `/api/files/:id` | Yes | Download/view an attachment (`Cache-Control: private`, CSP `sandbox`, safe inline allowlist) |
+| `DELETE` | `/api/files/:id` | Yes | Delete a file from R2/GCS and DB metadata |
+
+### GA4 OAuth & Properties (`/api/ga4/*`)
+
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| `GET` | `/api/ga4/oauth/authorize` | Yes | Returns signed Google OAuth URL (`?format=json` returns `{ url }`, default 302 redirect) |
+| `GET` | `/api/ga4/oauth/callback` | No* | Google redirect target; verifies HMAC-SHA256 `state` + 10-min TTL, stores encrypted tokens |
+| `GET` | `/api/ga4/oauth/status` | Yes | Check whether GA4 is connected and return `connected_email` |
+| `POST` | `/api/ga4/oauth/disconnect` | Yes | Revoke token at Google and delete stored GA4 credentials |
+| `GET` | `/api/ga4/properties` | Yes | List all accessible GA4 properties (auto-paginated via `nextPageToken`) |
+
+### Health & Readiness (Cloud Run Server)
+
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| `GET` | `/health` | No | GFE-safe liveness check returning `{ "ok": true, "ready": ..., "db": ..., "gcs": ..., "time": ... }` (`/healthz` alias for local Docker) |
+| `GET` | `/readyz` | No | Deep readiness check awaiting startup schema bootstrap and executing `SELECT 1` on Postgres |
+
+---
+
+## GA4 Function Calling — 8 Tool Declarations
+
+Gemini autonomously calls up to **20 turns** per request, executing multiple tool calls in a single turn in parallel (`Promise.all`):
+
+| Tool | Description | Backend API |
+|------|-------------|-------------|
+| `get_account_summaries` | Discover accessible GA4 accounts and properties | GA4 Admin API v1beta |
+| `get_property_details` | Property metadata (timezone, currency, industry, create time) | GA4 Admin API v1beta |
+| `list_google_ads_links` | Linked Google Ads accounts for a property | GA4 Admin API v1beta |
+| `run_report` | Standard reports (dimensions optional for aggregate totals) | GA4 Data API v1beta |
+| `run_realtime_report` | Realtime active users/events for the last 30 minutes (dimensions optional) | GA4 Data API v1beta |
+| `run_funnel_report` | Open/closed multi-step conversion funnel analysis | GA4 Data API v1alpha |
+| `get_custom_dimensions_and_metrics` | Custom dimensions & metrics registered on a property | GA4 Admin API v1beta |
+| `create_chart` | Renders Chart.js v4 PNG via QuickChart and saves privately to `CHAT_FILES` | QuickChart v4 + R2/GCS |
+
+---
+
+## Database Schema (7 Tables)
+
+Both [schema.sql](file:///c:/Users/FlameBreather/OneDrive/Desktop/Projects/A2ZDM/Final%20GTM%20GA4%20Project/GTM-GA4-Auditor/schema.sql) (Cloudflare D1 / SQLite) and [schema-postgres.sql](file:///c:/Users/FlameBreather/OneDrive/Desktop/Projects/A2ZDM/Final%20GTM%20GA4%20Project/GTM-GA4-Auditor/schema-postgres.sql) (Cloud SQL Postgres) share the same 7-table relational model:
+
+| Table | Purpose | Key Constraints / Notes |
+|-------|---------|-------------------------|
+| `users` | User accounts | Composite unique `(username, app)` and `(email, app)` (`'gtm'` \| `'ga4'`) |
+| `auth_tokens` | 30-day Bearer sessions | FK `user_id` `ON DELETE CASCADE`, indexed on `user_id` & `expires_at` |
+| `invite_keys` | Single-use onboarding keys | App-scoped (`'gtm'` \| `'ga4'`), `ON DELETE CASCADE` creator / `SET NULL` redeemer |
+| `sessions` | Conversation threads | Stores `mode` and optional `ga4_property_id`, indexed on `(user_id, mode, updated_at DESC)` |
+| `messages` | Ordered chat turns | Stores `role` (`'user'` \| `'model'`), `text`, `charts` JSON, and `attachments` JSON |
+| `ga4_oauth_tokens` | Per-user GA4 OAuth credentials | AES-GCM encrypted `access_token` & `refresh_token`, `connected_email`, `token_expiry` |
+| `attachments` | Uploaded files & generated charts | Tracks `session_id`, `message_id`, `user_id`, `mime_type`, `size`, and `r2_key` |
+
+---
+
+## Environment Variables & Secrets
+
+### Backend (Cloudflare Worker Secrets/Vars & Cloud Run `server/.env`)
+
+| Variable | Required | Where | Purpose |
+|----------|----------|-------|---------|
+| `GOOGLE_CLIENT_ID` | For GA4 | Worker secret / `server/.env` | Google OAuth 2.0 Client ID |
+| `GOOGLE_CLIENT_SECRET` | For GA4 | Worker secret / `server/.env` | Google OAuth 2.0 Client Secret |
+| `TOKEN_ENCRYPTION_KEY` | Yes | Worker secret / `server/.env` | AES-GCM token encryption & HMAC-SHA256 OAuth `state` signing key |
+| `GCP_SERVICE_ACCOUNT_JSON` | Workers / Optional Docker | Worker secret / Docker env | Raw or Base64 service account JSON (`GCP_SERVICE_ACCOUNT_JSON_B64` & `GEMINI_SERVICE_ACCOUNT_JSON` also accepted) |
+| `GCP_PROJECT_ID` / `GCP_LOCATION` | Auto on Cloud Run | Worker / `server/.env` | Vertex AI project ID (auto-detected from metadata on Cloud Run) and region (default `us-central1`) |
+| `ALLOWED_ORIGINS` | Recommended | Worker `[vars]` / `server/.env` | Comma-separated origin allowlist (defaults to `*` if unset) |
+| `PUBLIC_BASE_URL` | Recommended | Worker `[vars]` / `server/.env` | Explicit public API URL for OAuth callback redirects behind proxies |
+| `IMG_BB_API_KEY` | Optional | Worker secret / `server/.env` | Fallback chart host only when private `CHAT_FILES` context is absent |
+| `DATABASE_URL` | Cloud Run (alt) | `server/.env` | Postgres connection string (alternative to Cloud SQL socket / `DB_HOST`) |
+| `INSTANCE_CONNECTION_NAME` | Cloud Run | Cloud Run env | Cloud SQL `<project>:<region>:<instance>` for `/cloudsql/...` Unix socket (with `DB_USER`, `DB_PASSWORD`, `DB_NAME`) |
+| `DB_HOST` / `DB_PORT` / `DB_USER` / `DB_PASSWORD` / `DB_NAME` / `DB_SSL` | Docker / External PG | Docker Compose / env | Discrete TCP PostgreSQL settings when not using `DATABASE_URL` or `INSTANCE_CONNECTION_NAME` |
+| `AUTO_INIT_DB` / `AUTO_SEED_CONTAINER` / `AUTO_CREATE_BUCKETS` | Cloud Run | `Dockerfile` / env | Startup bootstrap toggles (defaults: `true`, `true`, `false`); applies [schema-postgres.sql](file:///c:/Users/FlameBreather/OneDrive/Desktop/Projects/A2ZDM/Final%20GTM%20GA4%20Project/GTM-GA4-Auditor/schema-postgres.sql) automatically under `pg_advisory_lock` |
+| `CONTAINER_BUCKET` / `FILES_BUCKET` | Cloud Run | `server/.env` | GCS buckets (default `<projectId>-gtm-container` & `<projectId>-chat-files`; set `FILES_BUCKET=none` to disable GCS uploads) |
+| `PORT` | Cloud Run | `server/.env` | Server port (default `8080` in Docker, `8787` in `server/.env.example`) |
+
+### Frontend (`Vite`)
+
+| Variable | Purpose |
+|----------|---------|
+| `VITE_WORKER_URL` | Overrides backend API base URL (defaults to `http://localhost:8787` in dev, same-origin `''` in production) |
+
+---
+
+## Getting Started & Scripts
 
 ### Prerequisites
-
-- [Node.js](https://nodejs.org/) (v18+)
-- [pnpm](https://pnpm.io/) or npm
-- A [Google Gemini API key](https://ai.google.dev/)
-- A [Cloudflare account](https://dash.cloudflare.com/) (for deployment)
-- *(Optional, for GA4 mode)* A [Google Cloud service account](https://cloud.google.com/iam/docs/service-accounts-create) with GA4 read access
+- **Node.js** 22+ and **pnpm** 10+
+- A **Google Cloud project** with Vertex AI enabled (and an OAuth 2.0 Web Client for GA4 mode)
+- **Cloudflare account** (for Workers/D1/KV/R2) **or** Docker + Postgres + GCS (for Cloud Run)
 
 ### 1. Install Dependencies
 
@@ -254,314 +364,106 @@ gtm-auditor_L/
 pnpm install
 ```
 
-### 2. Configure Environment
+### 2. Configure Backend & Minify GTM Container
 
-Create a `.env` file in the project root:
+- **Cloudflare Workers**: copy [wrangler.toml.example](file:///c:/Users/FlameBreather/OneDrive/Desktop/Projects/A2ZDM/Final%20GTM%20GA4%20Project/GTM-GA4-Auditor/wrangler.toml.example) to `wrangler.toml`, apply [schema.sql](file:///c:/Users/FlameBreather/OneDrive/Desktop/Projects/A2ZDM/Final%20GTM%20GA4%20Project/GTM-GA4-Auditor/schema.sql) to D1, set secrets via `wrangler secret put`, and upload the minified container to KV key `"container"`.
+- **Cloud Run / Node**: copy [server/.env.example](file:///c:/Users/FlameBreather/OneDrive/Desktop/Projects/A2ZDM/Final%20GTM%20GA4%20Project/GTM-GA4-Auditor/server/.env.example) to `server/.env`, apply [schema-postgres.sql](file:///c:/Users/FlameBreather/OneDrive/Desktop/Projects/A2ZDM/Final%20GTM%20GA4%20Project/GTM-GA4-Auditor/schema-postgres.sql), and upload the minified container to GCS as `container.json`.
 
-```env
-GEMINI_API_KEY="your-gemini-api-key-here"
-VITE_WORKER_URL="http://localhost:8787"
+```bash
+# Clean & minify GTM container JSON (supports optional [input] [output] args)
+pnpm run get-minified
 ```
 
 ### 3. Run Locally
 
-You need **two terminals** — one for the frontend, one for the backend:
-
 ```bash
-# Terminal 1 — Frontend (Vite dev server)
-pnpm run dev          # → http://localhost:5173
+# Backend (choose one):
+pnpm run dev:worker   # Cloudflare Worker via Wrangler → http://localhost:8787
+pnpm run dev:server   # Node/Hono Cloud Run server    → http://localhost:8787
 
-# Terminal 2 — Backend (Cloudflare Worker)
-pnpm run dev:worker   # → http://localhost:8787
+# Frontend (run either or both):
+pnpm run dev:gtm      # GTM Auditor UI → http://localhost:5173
+pnpm run dev:ga4      # GA4 Analyst UI → http://localhost:5174
 ```
-
-> **Note:** During local development, the frontend automatically detects the environment and points to your local Worker (`http://localhost:8787`). In production, it defaults to the same origin. You can override this by setting `VITE_WORKER_URL` in your `.env` file.
 
 ### Available Scripts
 
 | Script | Command | Purpose |
 |--------|---------|---------|
-| `dev` | `vite` | Start frontend dev server with HMR |
-| `dev:worker` | `wrangler dev` | Start backend Worker locally |
-| `build` | `vite build` | Production build → `dist/` |
-| `preview` | `vite preview` | Preview production build |
-| `get-minified` | `tsx get-minified.ts` | Run GTM container minification |
-| `lint` | `tsc --noEmit` | TypeScript type-checking |
+| `dev:gtm` | `pnpm --filter @brighthorizon/gtm dev` | Start GTM frontend dev server (`:5173`) |
+| `dev:ga4` | `pnpm --filter @brighthorizon/ga4 dev` | Start GA4 frontend dev server (`:5174`) |
+| `dev:worker` | `wrangler dev` | Start Cloudflare Worker locally (`:8787`) |
+| `dev:server` | `pnpm --filter @gtm-auditor/server dev` | Start Node/Hono Cloud Run dev server (`:8787`) |
+| `build:gtm` | `pnpm --filter @brighthorizon/gtm build` | Build GTM frontend → `frontend/apps/gtm/dist` |
+| `build:ga4` | `pnpm --filter @brighthorizon/ga4 build` | Build GA4 frontend → `frontend/apps/ga4/dist` |
+| `build:all` | `pnpm run build:gtm && pnpm run build:ga4` | Build both frontend SPAs |
+| `get-minified` | `tsx get-minified.ts` | Clean & minify GTM container JSON |
+| `typecheck` | `tsc --noEmit` across all 5 packages | Type-check `worker`, `server`, `shared`, `gtm`, and `ga4` |
+| `test` | `tsx --test tests/*.test.ts` | Run automated unit tests (21 tests) |
 
 ---
 
 ## Deployment
 
-### Backend — Cloudflare Workers
+### Option A: Cloudflare Workers + Cloudflare Pages
 
 ```bash
-# Deploy the Worker
+# 1. Initialize D1 & upload minified container to KV
+npx wrangler d1 execute gtm-chat-history --file=./schema.sql --remote
+npx wrangler kv key put --binding=GTM_CONTAINER "container" --path=./data/container-minified.json
+
+# 2. Set secrets & deploy Worker (also registers daily 03:00 UTC Cron token purge)
+npx wrangler secret put GOOGLE_CLIENT_ID
+npx wrangler secret put GOOGLE_CLIENT_SECRET
+npx wrangler secret put TOKEN_ENCRYPTION_KEY
+npx wrangler secret put GCP_SERVICE_ACCOUNT_JSON
 npx wrangler deploy
+
+# 3. Build & deploy both frontend SPAs
+pnpm run build:all
+npx wrangler pages deploy frontend/apps/gtm/dist --project-name brighthorizon-gtm
+npx wrangler pages deploy frontend/apps/ga4/dist --project-name brighthorizon-ga4
 ```
 
-The Worker is configured via `wrangler.toml`:
+### Option B: GCP Cloud Run (Docker) + Cloud SQL + GCS
 
-```toml
-name = "gtm-auditor-server"
-main = "worker.ts"
-compatibility_date = "2024-01-01"
-compatibility_flags = ["nodejs_compat"]
-
-[[kv_namespaces]]
-binding = "GTM_CONTAINER"
-id = "your-kv-namespace-id"
-
-[[d1_databases]]
-binding = "gtm_chat_history"
-database_name = "gtm-chat-history"
-database_id = "your-d1-database-id"
-```
-
-### Frontend — Cloudflare Pages
+The root [Dockerfile](file:///c:/Users/FlameBreather/OneDrive/Desktop/Projects/A2ZDM/Final%20GTM%20GA4%20Project/GTM-GA4-Auditor/Dockerfile) and [server/src/bootstrap.ts](file:///c:/Users/FlameBreather/OneDrive/Desktop/Projects/A2ZDM/Final%20GTM%20GA4%20Project/GTM-GA4-Auditor/server/src/bootstrap.ts) automatically detect the Cloud Run project/ADC credentials (or materialize `GCP_SERVICE_ACCOUNT_JSON` / `GCP_SERVICE_ACCOUNT_JSON_B64`), connect over Cloud SQL Unix sockets (`INSTANCE_CONNECTION_NAME`) or `DATABASE_URL`/`DB_HOST`, initialize [schema-postgres.sql](file:///c:/Users/FlameBreather/OneDrive/Desktop/Projects/A2ZDM/Final%20GTM%20GA4%20Project/GTM-GA4-Auditor/schema-postgres.sql) under a Postgres advisory lock, and auto-seed `container.json` into GCS when missing:
 
 ```bash
-# Build & deploy
-pnpm run build
-npx wrangler pages deploy dist --project-name gtm-auditor
-```
+# 1. End-to-end automated GCP provisioning + deploy (Cloud SQL, GCS, IAM, Secret Manager, Cloud Run):
+PROJECT_ID=your-gcp-project-id bash deploy/cloudrun-setup.sh
 
-### First-Time Setup Checklist
+# Windows PowerShell equivalent:
+# ./deploy/cloudrun-setup.ps1 -ProjectId your-gcp-project-id
 
-1. Install Wrangler: `npm install -g wrangler`
-2. Authenticate: `wrangler login`
-3. Create a KV namespace and note the ID
-4. Upload GTM container JSON to KV:
-   ```bash
-   npx wrangler kv:key put --namespace-id=<YOUR_KV_ID> "container" --path=./src/Container/container-minified.json
-   ```
-5. Create D1 database: `wrangler d1 create gtm-chat-history`
-6. Run schema migration:
-   ```bash
-   npx wrangler d1 execute gtm-chat-history --file=./schema.sql --remote
-   ```
-7. Set the Gemini API key secret: `wrangler secret put GEMINI_API_KEY`
-8. *(Optional — for GA4 mode)* Set the GA4 service account JSON secret:
-   ```bash
-   wrangler secret put GA4_SERVICE_ACCOUNT_JSON
-   ```
-   Paste the full JSON content of your service account key file when prompted.
-9. Deploy the Worker: `npx wrangler deploy`
-10. Build & deploy the frontend: `pnpm build && npx wrangler pages deploy dist --project-name gtm-auditor`
+# 2. Local Docker Compose stack (PostgreSQL 16 + self-bootstrapping server on http://localhost:8787):
+docker compose up --build
 
-### GA4 Mode Setup
-
-To enable GA4 mode, you need a Google Cloud service account with access to your GA4 property:
-
-1. **Create a service account** in the [Google Cloud Console](https://console.cloud.google.com/iam-admin/serviceaccounts)
-2. **Grant permissions** — Add the service account email as a viewer in your GA4 property (Admin → Property Access Management)
-3. **Download the JSON key** for the service account
-4. **Set the secret** on your Worker:
-   ```bash
-   wrangler secret put GA4_SERVICE_ACCOUNT_JSON
-   # Paste the entire JSON key file contents when prompted
-   ```
-5. **Configure a property ID** — After deploying, each user can set their GA4 property ID in the app (stored per-user in KV)
-
-The service account requires these OAuth scopes (automatically requested):
-- `https://www.googleapis.com/auth/analytics.readonly`
-- `https://www.googleapis.com/auth/analytics`
-
----
-
-## API Reference
-
-All endpoints are prefixed with `/api` on the Worker URL.
-
-### Authentication
-
-| Method | Endpoint | Auth Required | Description |
-|--------|----------|---------------|-------------|
-| `POST` | `/api/auth/bootstrap` | No | Create the first user (no invite key needed) |
-| `POST` | `/api/auth/signup` | No | Register a new user with an invite key |
-| `POST` | `/api/auth/login` | No | Authenticate with email + password, obtain a token |
-| `POST` | `/api/auth/logout` | Yes | Invalidate the current auth token |
-| `GET` | `/api/auth/me` | Yes | Get current user info |
-| `POST` | `/api/auth/invite` | Yes | Generate a new single-use invite key |
-| `GET` | `/api/auth/invite-keys` | Yes | List invite keys created by the current user |
-
-### Chat Sessions
-
-| Method | Endpoint | Auth Required | Description |
-|--------|----------|---------------|-------------|
-| `GET` | `/api/sessions?mode=gtm\|ga4` | Yes | List all chat sessions for the logged-in user, filtered by mode (default: `gtm`) |
-| `POST` | `/api/sessions` | Yes | Create a new session (`{ id, title, mode }`) |
-| `PATCH` | `/api/sessions/:id` | Yes | Rename a session (`{ title }`) |
-| `DELETE` | `/api/sessions/:id` | Yes | Delete a session and all its messages |
-| `GET` | `/api/sessions/:id/messages` | Yes | Get all messages for a session |
-| `POST` | `/api/chat` | Yes | Send a question (`{ sessionId, question, mode, ga4PropertyId? }`) — returns SSE stream for GTM or JSON for GA4 |
-
-### GA4 Property Configuration
-
-| Method | Endpoint | Auth Required | Description |
-|--------|----------|---------------|-------------|
-| `GET` | `/api/ga4/property` | Yes | Get the current user's configured GA4 property ID |
-| `PUT` | `/api/ga4/property` | Yes | Set/update the GA4 property ID (`{ property_id }`) — must be numeric |
-
-### SSE Stream Format (GTM Mode)
-
-The `/api/chat` endpoint returns a `text/event-stream` response when `mode` is `gtm`:
-
-```
-data: {"text":"Based on your container"}
-
-data: {"text":", the following tags are"}
-
-data: {"text":" missing consent settings:\n\n1."}
-
-data: [DONE]
-```
-
-### JSON Response Format (GA4 Mode)
-
-The `/api/chat` endpoint returns a JSON response when `mode` is `ga4`:
-
-```json
-{
-  "answer": "Based on your GA4 data, the top 5 events by count in the last 30 days are:\n\n1. **page_view** — 45,231 events\n2. **scroll** — 32,107 events\n..."
-}
+# 3. Verify liveness and readiness (DB schema + SELECT 1):
+curl -sSf https://your-service-url/health
+curl -sSf https://your-service-url/readyz
 ```
 
 ---
 
-## Gemini Context Caching (GTM Mode)
+## Testing & Verification
 
-The most critical performance optimization — avoids re-sending ~771KB of container data on every request:
-
-| Metric | Without Caching | With Caching |
-|--------|----------------|--------------|
-| **Input tokens/request** | ~200K+ | ~1K–5K |
-| **Latency** | Slower | Faster |
-| **API cost** | High | Significantly lower |
-
-**How it works:**
-1. On first request, the Worker creates a Gemini context cache containing the full container JSON (TTL: 30 min)
-2. The cache name is stored in Cloudflare KV for cross-request reuse
-3. Subsequent requests reference the cache instead of re-sending the container
-4. If cache creation fails, the Worker falls back to inline context injection
-
----
-
-## GA4 Service Account Authentication
-
-The Worker implements **full JWT-based OAuth 2.0 service account flow** using only the Web Crypto API — no external authentication libraries:
-
-1. **JWT Construction** — Header (`RS256`) + Claims (`iss`, `scope`, `aud`, `iat`, `exp`) encoded as Base64URL
-2. **RS256 Signing** — Private key imported via `crypto.subtle.importKey('pkcs8')`, signed with `RSASSA-PKCS1-v1_5`
-3. **Token Exchange** — JWT assertion exchanged for an access token via `https://oauth2.googleapis.com/token`
-4. **In-Memory Caching** — Access tokens cached with automatic refresh 2 minutes before expiry
-
----
-
-## GTM Container Minification
-
-A sophisticated utility (`src/utils/gtm-minifier.ts`, ~320 lines) that transforms raw GTM container exports into AI-friendly format:
-
-- **Strips metadata fields** — Removes `fingerprint`, `monitoringMetadata`, `accountId`, `containerId`
-- **Resolves variable references** — Replaces opaque `{{_u:12345}}` tokens with human-readable `{{VariableName}}`
-- **Normalizes parameters** — Converts nested parameter structures into flat key-value objects
-- **Resolves trigger conditions** — Converts to readable strings like `"page_url contains /checkout"`
-- **Resolves trigger IDs** — Maps firing/blocking trigger IDs to their names
-- **Resolves custom templates** — Maps `cvt_...` IDs to template names
-- **78% size reduction** — Raw 1.6MB container → ~353KB minified
-
----
-
-## Database Schema
-
-The D1 database ensures secure user accounts and persistent chat history with five tables:
-
-```sql
--- Users
-CREATE TABLE users (
-  id         TEXT PRIMARY KEY,
-  username   TEXT NOT NULL UNIQUE,
-  email      TEXT NOT NULL UNIQUE
-                  CHECK(email LIKE '%_@_%.__%'),  -- Email format validation
-  password   TEXT NOT NULL,  -- PBKDF2 hash (100K iterations, SHA-256)
-  created_at INTEGER NOT NULL,
-  updated_at INTEGER NOT NULL DEFAULT 0
-) WITHOUT ROWID;
-
--- Auth Tokens (30-day expiry)
-CREATE TABLE auth_tokens (
-  token      TEXT PRIMARY KEY,
-  user_id    TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  created_at INTEGER NOT NULL,
-  expires_at INTEGER NOT NULL
-) WITHOUT ROWID;
-
--- Invite Keys (single-use, INV- prefix)
-CREATE TABLE invite_keys (
-  invite_key TEXT PRIMARY KEY,
-  created_by TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  used_by    TEXT          REFERENCES users(id) ON DELETE SET NULL,
-  used_at    INTEGER,
-  created_at INTEGER NOT NULL
-) WITHOUT ROWID;
-
--- Chat Sessions (with mode: 'gtm' | 'ga4')
-CREATE TABLE sessions (
-  id         TEXT PRIMARY KEY,
-  title      TEXT NOT NULL DEFAULT 'New Chat',
-  mode       TEXT NOT NULL DEFAULT 'gtm' CHECK(mode IN ('gtm', 'ga4')),
-  user_id    TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  created_at INTEGER NOT NULL,
-  updated_at INTEGER NOT NULL
-) WITHOUT ROWID;
-
--- Chat Messages
-CREATE TABLE messages (
-  id         INTEGER PRIMARY KEY AUTOINCREMENT,
-  session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
-  role       TEXT NOT NULL CHECK(role IN ('user', 'model')),
-  text       TEXT NOT NULL,
-  created_at INTEGER NOT NULL
-);
+```bash
+pnpm run typecheck                 # TypeScript checks across worker, server, shared, gtm, ga4
+pnpm test                          # Unit tests: GTM minifier, crypto/HMAC, routes/CORS/OOXML/pg shim
+pnpm run build:all                 # Production Vite builds for both frontend apps
+npx wrangler deploy --dry-run      # Verify Cloudflare Worker bundle
 ```
-
-### Indexes
-
-| Index | Table | Columns | Purpose |
-|-------|-------|---------|---------|
-| `idx_auth_tokens_user` | auth_tokens | `user_id` | Fast token lookup by user |
-| `idx_auth_tokens_expires` | auth_tokens | `expires_at` | Efficient expired token cleanup |
-| `idx_invite_keys_created_by` | invite_keys | `created_by` | List keys by creator |
-| `idx_sessions_user` | sessions | `user_id, updated_at DESC` | User session listing (sorted) |
-| `idx_sessions_user_mode` | sessions | `user_id, mode, updated_at DESC` | Mode-filtered session listing |
-| `idx_messages_session` | messages | `session_id, created_at` | Ordered message retrieval |
-
-See `schema.sql` for the full schema including maintenance queries.
 
 ---
 
 ## Security Notes
 
-> **This project is intended for personal/internal use.** The following are known considerations:
-
-| Item | Status | Notes |
-|------|--------|-------|
-| Authentication | **Implemented** | PBKDF2 password hashing (100K iterations, SHA-256) via Web Crypto API |
-| Invite-Only Registration | **Implemented** | First user bootstraps without a key; all subsequent users need a valid single-use invite key |
-| Token Expiry | **Implemented** | Auth tokens expire after 30 days |
-| Email Validation | **Implemented** | SQL CHECK constraint enforces basic email format |
-| GA4 Service Account | **Implemented** | JWT (RS256) signing via Web Crypto — private key stored as Cloudflare secret |
-| CORS | `*` (wildcard) | Restrict to your domain for production |
-| Rate Limiting | None | Consider adding for API abuse protection |
-| API Keys | Stored as Cloudflare secrets | `GEMINI_API_KEY` and `GA4_SERVICE_ACCOUNT_JSON` — never committed to version control |
-
----
-
-## License
-
-This project is private and not licensed for redistribution.
-
----
-
-<div align="center">
-<sub>Built with React, Cloudflare Workers, Google Gemini, and GA4 APIs</sub>
-</div>
+| Control | Implementation |
+|---------|----------------|
+| Password Storage | PBKDF2-SHA256 (`100,000` iterations, 16-byte random salt) + `timingSafeEqual` |
+| Auth Transport | `Authorization: Bearer <token>` only (no URL query tokens); 30-day token TTL + Cron purge |
+| Invite Registration | Single-use `INV-...` keys scoped by app, redeemed atomically in batch SQL |
+| GA4 OAuth Protection | HMAC-SHA256 signed `state` (10-min TTL), AES-GCM SHA-256 encrypted tokens, HTML-escaped callback |
+| File & Chart Security | Private R2/GCS storage, `Cache-Control: private`, `nosniff`, CSP `sandbox`, inline MIME allowlist |
+| Abuse & Origin Guards | In-memory rate limits on `/api/auth/*` and `/api/chat`; configurable `ALLOWED_ORIGINS` CORS |

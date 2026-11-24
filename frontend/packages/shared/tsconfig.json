@@ -10,9 +10,7 @@
     "allowJs": true,
     "jsx": "react-jsx",
     "allowImportingTsExtensions": true,
-    "emitDeclarationOnly": true,
-    "outDir": "dist",
-    "composite": true,
+    "noEmit": true,
     "strict": true,
     "types": ["vite/client"]
   },

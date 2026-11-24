@@ -1,3 +1,51 @@
+function mapConditionOperator(rawType: string, negate: boolean): string {
+  const op = rawType.toUpperCase().trim();
+
+  const positiveMap: Record<string, string> = {
+    CONTAINS: 'contains',
+    EQUALS: 'equals',
+    MATCH_REGEX: 'matches regex',
+    REGEX: 'matches regex',
+    STARTS_WITH: 'starts with',
+    ENDS_WITH: 'ends with',
+    CSS_SELECTOR: 'matches CSS selector',
+    GREATER: 'is greater than',
+    GREATER_OR_EQUALS: 'is greater than or equal to',
+    LESS: 'is less than',
+    LESS_OR_EQUALS: 'is less than or equal to',
+    URL_MATCHES: 'URL matches',
+  };
+
+  const negativeMap: Record<string, string> = {
+    CONTAINS: 'does not contain',
+    EQUALS: 'does not equal',
+    MATCH_REGEX: 'does not match regex',
+    REGEX: 'does not match regex',
+    STARTS_WITH: 'does not start with',
+    ENDS_WITH: 'does not end with',
+    CSS_SELECTOR: 'does not match CSS selector',
+    GREATER: 'is not greater than',
+    GREATER_OR_EQUALS: 'is not greater than or equal to',
+    LESS: 'is not less than',
+    LESS_OR_EQUALS: 'is not less than or equal to',
+    URL_MATCHES: 'URL does not match',
+  };
+
+  if (positiveMap[op]) {
+    return negate ? negativeMap[op] : positiveMap[op];
+  }
+
+  const lower = op.toLowerCase();
+  if (lower.includes('contains')) return negate ? 'does not contain' : 'contains';
+  if (lower.includes('equals') || lower === '==') return negate ? 'does not equal' : 'equals';
+  if (lower.includes('regex') || lower.includes('match')) return negate ? 'does not match regex' : 'matches regex';
+  if (lower.includes('starts')) return negate ? 'does not start with' : 'starts with';
+  if (lower.includes('ends')) return negate ? 'does not end with' : 'ends with';
+  if (lower.includes('css')) return negate ? 'does not match CSS selector' : 'matches CSS selector';
+
+  return negate ? `does not match (${rawType || 'condition'})` : 'matches';
+}
+
 export function minifyGTM(rawJsonStr: string): any {
   function safeParse(jsonStr: string) {
     try {
@@ -105,7 +153,7 @@ export function minifyGTM(rawJsonStr: string): any {
             (item: any) =>
               item &&
               typeof item === 'object' &&
-              ('parameter' in item || 'parameterValue' in item || 'parameterName' in item)
+              ('parameter' in item || 'parameterValue' in item || 'parameterName' in item),
           )
         ) {
           const merged: any = {};
@@ -131,7 +179,32 @@ export function minifyGTM(rawJsonStr: string): any {
     return out;
   }
 
-  function humanizeTriggers(triggerArray: any[], varMap: Record<string, string>, triggerMap: Record<string, string>) {
+  function formatCondition(cond: any, varMap: Record<string, string>): string {
+    const paramObj: any = {};
+    for (const p of cond.parameter) {
+      if (!p || !p.key) continue;
+      paramObj[p.key] = p.value;
+    }
+
+    const rawArg0 = paramObj.arg0 ?? paramObj.parameter ?? paramObj.left ?? '';
+    const rawArg1 = paramObj.arg1 ?? paramObj.parameterValue ?? paramObj.right ?? '';
+    const rawType = String(cond.type || paramObj.type || paramObj.operator || paramObj.matchType || '');
+    const negate = String(paramObj.negate ?? '').toLowerCase() === 'true';
+    const ignoreCase = String(paramObj.ignore_case ?? '').toLowerCase() === 'true';
+
+    const arg0 = replaceVarTokensInString(String(rawArg0), varMap);
+    const arg1 = replaceVarTokensInString(String(rawArg1), varMap);
+    const opWord = mapConditionOperator(rawType, negate);
+    const caseSuffix = ignoreCase ? ' (case-insensitive)' : '';
+
+    return `${arg0} ${opWord} ${arg1}${caseSuffix}`.trim();
+  }
+
+  function humanizeTriggers(
+    triggerArray: any[],
+    varMap: Record<string, string>,
+    triggerMap: Record<string, string>,
+  ) {
     if (!Array.isArray(triggerArray)) return [];
     for (const trig of triggerArray) {
       delete trig.fingerprint;
@@ -144,58 +217,15 @@ export function minifyGTM(rawJsonStr: string): any {
       for (const prop of Object.keys(trig)) {
         const val = trig[prop];
         if (!Array.isArray(val)) continue;
-        const looksLikeConditionArray = val.length > 0 && val.every((el) => el && Array.isArray(el.parameter));
+        const looksLikeConditionArray =
+          val.length > 0 && val.every((el) => el && Array.isArray(el.parameter));
         if (!looksLikeConditionArray) continue;
 
         for (const cond of val) {
-          const paramObj: any = {};
-          for (const p of cond.parameter) {
-            if (!p || !p.key) continue;
-            paramObj[p.key] = p.value;
-          }
-
-          const rawArg0 = paramObj.arg0 || paramObj.parameter || paramObj.left || '';
-          const rawArg1 = paramObj.arg1 || paramObj.parameterValue || paramObj.right || '';
-          const rawType = paramObj.type || paramObj.operator || paramObj.matchType || '';
-
-          const arg0 = replaceVarTokensInString(String(rawArg0), varMap);
-          const arg1 = replaceVarTokensInString(String(rawArg1), varMap);
-          const op = String(rawType).toLowerCase();
-
-          let opWord = op;
-          if (op.includes('contains')) opWord = 'contains';
-          else if (op.includes('equals') || op === 'equals' || op === '==') opWord = 'equals';
-          else if (op.includes('match') || op.includes('regex')) opWord = 'matches regex';
-          else if (op.includes('starts')) opWord = 'starts with';
-          else if (op.includes('ends')) opWord = 'ends with';
-          else if (!op) opWord = 'matches';
-
-          conditions.push(`${arg0} ${opWord} ${arg1}`.trim());
+          conditions.push(formatCondition(cond, varMap));
         }
 
         delete trig[prop];
-      }
-
-      if (Array.isArray(trig.filter)) {
-        for (const cond of trig.filter) {
-          if (!cond || !Array.isArray(cond.parameter)) continue;
-          const paramObj: any = {};
-          for (const p of cond.parameter) {
-            paramObj[p.key] = p.value;
-          }
-          const arg0 = replaceVarTokensInString(String(paramObj.arg0 || paramObj.parameter || ''), varMap);
-          const arg1 = replaceVarTokensInString(String(paramObj.arg1 || paramObj.parameterValue || ''), varMap);
-          const op = String(paramObj.type || paramObj.operator || '').toLowerCase();
-          const opWord = op.includes('contains')
-            ? 'contains'
-            : op.includes('equals')
-              ? 'equals'
-              : op.includes('match')
-                ? 'matches regex'
-                : 'matches';
-          conditions.push(`${arg0} ${opWord} ${arg1}`);
-        }
-        delete trig.filter;
       }
 
       if (Array.isArray(trig.firingTriggerId)) {
@@ -215,6 +245,28 @@ export function minifyGTM(rawJsonStr: string): any {
       }
     }
     return triggerArray;
+  }
+
+  function finalizeStrings(node: any, varMap: Record<string, string>): any {
+    if (typeof node === 'string') {
+      const resolved = node.replace(/\{\{_u:(\d+)\}\}/g, (_m, id) => {
+        const name = varMap[String(id)];
+        return `{{${name || `_u:${id}`}}}`;
+      });
+      return resolved.replace(/\n{2,}/g, '\n');
+    }
+    if (Array.isArray(node)) {
+      for (let i = 0; i < node.length; i++) {
+        node[i] = finalizeStrings(node[i], varMap);
+      }
+      return node;
+    }
+    if (node && typeof node === 'object') {
+      for (const k of Object.keys(node)) {
+        node[k] = finalizeStrings(node[k], varMap);
+      }
+    }
+    return node;
   }
 
   const data = safeParse(rawJsonStr);
@@ -308,10 +360,7 @@ export function minifyGTM(rawJsonStr: string): any {
   delete data.accountId;
   delete data.containerId;
 
-  let minifiedStr = JSON.stringify(data);
-  minifiedStr = minifiedStr.replace(/\{\{_u:(\d+)\}\}/g, (m, id) => `{{${varMap[String(id)] || `_u:${id}`}}}`);
-
-  return JSON.parse(minifiedStr.replace(/(\\n){2,}/g, '\\n'));
+  return finalizeStrings(data, varMap);
 }
 
 export function minifyGTMToString(rawJsonStr: string): string {

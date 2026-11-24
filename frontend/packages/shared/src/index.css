@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@plugin "@tailwindcss/typography";
 @source ".";
 @source "../../../apps/gtm/src";
 @source "../../../apps/ga4/src";
@@ -43,7 +44,7 @@
 }
 
 @utility glass {
-  backdrop-blur: 12px;
+  backdrop-filter: blur(12px);
   background-color: rgba(255, 255, 255, 0.7);
   border: 1px solid rgba(255, 255, 255, 0.2);
 }
@@ -60,21 +61,12 @@
   animation: zoom-in 0.2s cubic-bezier(0, 0, 0.2, 1) forwards;
 }
 
-/* Shadcn-like animation utilities for Tailwind 4 */
-@utility animate-in {
-  animation-duration: 500ms;
-  animation-fill-mode: forwards;
-  animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+@utility animate-scale-in {
+  animation: scale-in 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
 }
 
-@utility fade-in {
-  --tw-enter-opacity: 0;
-  animation-name: enter-fade;
-}
-
-@utility slide-in-from-bottom-2 {
-  --tw-enter-translate-y: 0.5rem;
-  animation-name: enter-slide-y;
+@utility animate-chart-in {
+  animation: chart-enter 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
 @keyframes fade-in {
@@ -82,21 +74,35 @@
   to { opacity: 1; }
 }
 
-@keyframes enter-fade {
-  from { opacity: var(--tw-enter-opacity, 0); }
+@keyframes chart-enter {
+  from {
+    opacity: 0;
+    transform: translateY(0.5rem);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
-@keyframes enter-slide-y {
-  from { transform: translateY(var(--tw-enter-translate-y, 0)); }
-}
-
-@keyframes slide-in-from-top {
-  from { transform: translateY(-0.5rem); opacity: 0; }
-  to { transform: translateY(0); opacity: 1; }
+@keyframes modelDropdownIn {
+  from {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 
 @keyframes zoom-in {
   from { transform: scale(0.95); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+
+@keyframes scale-in {
+  from { transform: scale(0.9); opacity: 0; }
   to { transform: scale(1); opacity: 1; }
 }
 
@@ -108,7 +114,7 @@
 /* Premium Table Styles */
 .prose table {
   width: 100%;
-  border-separate: true;
+  border-collapse: separate;
   border-spacing: 0;
   overflow: hidden;
   border-radius: 0.75rem;

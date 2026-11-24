@@ -6,8 +6,6 @@ interface Props {
   mode: AppMode;
   activeMessageId: string | null;
   onJumpTo: (id: string) => void;
-  isOpen: boolean;
-  onToggle: () => void;
 }
 
 function truncate(text: string, maxLen = 38): string {
@@ -21,7 +19,7 @@ function truncateMultiline(text: string, maxLen = 48): string {
 }
 
 interface Turn {
-  id: string; // composite or user message id
+  id: string;
   userMsg: ChatMessage;
   modelMsg?: ChatMessage;
   index: number;
@@ -30,7 +28,6 @@ interface Turn {
 export function ChatOutline({ messages, mode, activeMessageId, onJumpTo }: Props) {
   const [hovered, setHovered] = useState(false);
 
-  // Build conversation turns: (user -> optional model)
   const turns = useMemo(() => {
     const turnsList: Turn[] = [];
     let pendingUser: ChatMessage | null = null;
@@ -40,7 +37,7 @@ export function ChatOutline({ messages, mode, activeMessageId, onJumpTo }: Props
       if (msg.role === 'user') {
         if (pendingUser) {
           turnsList.push({
-            id: pendingUser.id!,
+            id: pendingUser.id ?? `turn-${i}`,
             userMsg: pendingUser,
             modelMsg: undefined,
             index: turnsList.length,
@@ -49,7 +46,7 @@ export function ChatOutline({ messages, mode, activeMessageId, onJumpTo }: Props
         pendingUser = msg;
       } else if (msg.role === 'model' && pendingUser) {
         turnsList.push({
-          id: pendingUser.id!,
+          id: pendingUser.id ?? `turn-${i}`,
           userMsg: pendingUser,
           modelMsg: msg,
           index: turnsList.length,
@@ -60,7 +57,7 @@ export function ChatOutline({ messages, mode, activeMessageId, onJumpTo }: Props
 
     if (pendingUser) {
       turnsList.push({
-        id: pendingUser.id!,
+        id: pendingUser.id ?? `turn-last`,
         userMsg: pendingUser,
         modelMsg: undefined,
         index: turnsList.length,
@@ -115,7 +112,7 @@ export function ChatOutline({ messages, mode, activeMessageId, onJumpTo }: Props
           return (
             <button
               key={turn.id}
-              onClick={() => onJumpTo(turn.userMsg.id!)}
+              onClick={() => onJumpTo(turn.id)}
               style={{
                 width: '100%',
                 display: 'block',
@@ -133,16 +130,13 @@ export function ChatOutline({ messages, mode, activeMessageId, onJumpTo }: Props
                 marginBottom: 4,
               }}
               onMouseEnter={(e) => {
-                if (!isActive)
-                  (e.currentTarget as HTMLButtonElement).style.background = '#f9fafb';
+                if (!isActive) (e.currentTarget as HTMLButtonElement).style.background = '#f9fafb';
               }}
               onMouseLeave={(e) => {
-                if (!isActive)
-                  (e.currentTarget as HTMLButtonElement).style.background = 'transparent';
+                if (!isActive) (e.currentTarget as HTMLButtonElement).style.background = 'transparent';
               }}
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                {/* Number badge */}
                 <span
                   style={{
                     flexShrink: 0,
@@ -161,7 +155,6 @@ export function ChatOutline({ messages, mode, activeMessageId, onJumpTo }: Props
                   {turn.index + 1}
                 </span>
 
-                {/* Question preview */}
                 <span
                   style={{
                     fontSize: 12,
@@ -174,11 +167,10 @@ export function ChatOutline({ messages, mode, activeMessageId, onJumpTo }: Props
                     flex: 1,
                   }}
                 >
-                  {truncate(turn.userMsg.text)}
+                  {truncate(turn.userMsg.text || 'Attachment')}
                 </span>
               </div>
 
-              {/* Model output preview (if exists) */}
               <div
                 style={{
                   marginTop: 6,

@@ -1,9 +1,4 @@
 packages:
   - "frontend/apps/*"
   - "frontend/packages/*"
-allowBuilds:
-  '@google/genai': true
-  esbuild: true
-  protobufjs: true
-  sharp: true
-  workerd: true
+  - "server"

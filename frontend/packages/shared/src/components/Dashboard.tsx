@@ -1,6 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback, Suspense, lazy } from 'react';
 import {
-  MessageSquare,
   Send,
   Square,
   Loader2,
@@ -17,6 +16,8 @@ import {
   File as FileIcon,
   Trash2,
   UploadCloud,
+  ChevronRight,
+  Sparkles,
 } from 'lucide-react';
 import { ChatOutline } from './ChatOutline';
 import { BrightHorizonLogo } from './Sidebar';
@@ -74,10 +75,47 @@ function CopyTableButton() {
     <button
       type="button"
       onClick={handleCopy}
-      className="absolute top-2 right-2 p-1.5 bg-white/90 backdrop-blur border border-gray-100 rounded-lg shadow-sm opacity-0 group-hover/table:opacity-100 transition-opacity hover:bg-white text-gray-400 hover:text-gray-600"
+      aria-label={copied ? 'Table copied' : 'Copy table to clipboard'}
+      className="absolute top-2.5 right-2.5 p-1.5 bg-[var(--surface)]/95 backdrop-blur border border-[var(--border)] rounded-lg shadow-sm opacity-0 group-hover/table:opacity-100 focus:opacity-100 transition-all hover:border-[var(--bh-cerulean)] text-[var(--muted)] hover:text-[var(--bh-nile)]"
       title="Copy table to clipboard"
     >
-      {copied ? <Check className="w-3.5 h-3.5 text-green-500" /> : <Copy className="w-3.5 h-3.5" />}
+      {copied ? <Check className="w-3.5 h-3.5 text-[var(--bh-emerald)]" /> : <Copy className="w-3.5 h-3.5" />}
+    </button>
+  );
+}
+
+function CopyResponseButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = async () => {
+    if (!text) return;
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      /* clipboard permission denied */
+    }
+  };
+
+  return (
+    <button
+      type="button"
+      onClick={handleCopy}
+      aria-label={copied ? 'Response copied' : 'Copy response'}
+      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-semibold text-[var(--muted)] hover:text-[var(--bh-nile)] hover:bg-[var(--surface-subtle)] transition-colors"
+    >
+      {copied ? (
+        <>
+          <Check className="w-3 h-3 text-[var(--bh-emerald)]" />
+          <span className="text-[var(--bh-emerald)]">Copied</span>
+        </>
+      ) : (
+        <>
+          <Copy className="w-3 h-3" />
+          <span>Copy</span>
+        </>
+      )}
     </button>
   );
 }
@@ -119,6 +157,7 @@ export function Dashboard({
   const [isStreaming, setIsStreaming] = useState(false);
   const [isLoadingMsgs, setIsLoadingMsgs] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [retryNonce, setRetryNonce] = useState(0);
   const [showSettings, setShowSettings] = useState(false);
   const [settingsPid, setSettingsPid] = useState(ga4PropertyId);
   const [isSavingPid, setIsSavingPid] = useState(false);
@@ -227,7 +266,7 @@ export function Dashboard({
     return () => {
       cancelled = true;
     };
-  }, [sessionId, chatApi]);
+  }, [sessionId, chatApi, retryNonce]);
 
   useEffect(() => {
     setSettingsPid(ga4PropertyId);
@@ -241,6 +280,15 @@ export function Dashboard({
       abortControllerRef.current?.abort();
     };
   }, [sessionId]);
+
+  useEffect(() => {
+    if (!showTokenExpiredModal) return;
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setShowTokenExpiredModal(false);
+    };
+    document.addEventListener('keydown', handleKey);
+    return () => document.removeEventListener('keydown', handleKey);
+  }, [showTokenExpiredModal]);
 
   // Auto-resize textarea height cleanly
   useEffect(() => {
@@ -477,9 +525,7 @@ export function Dashboard({
       }
     } catch (err: any) {
       if (err?.name === 'AbortError') {
-        setChatMessages((prev) =>
-          prev.filter((m) => !(m.id === modelMsgId && !m.text)),
-        );
+        setChatMessages((prev) => prev.filter((m) => !(m.id === modelMsgId && !m.text)));
         return;
       }
 
@@ -579,12 +625,23 @@ export function Dashboard({
 
   if (isLoadingMsgs) {
     return (
-      <div className="flex-1 flex items-center justify-center">
-        <div className="flex items-center gap-2">
-          <Loader2 className="w-5 h-5 animate-spin" style={{ color: isGa4 ? '#e8710a' : '#1a3a5c' }} />
-          <span className="text-sm" style={{ color: '#6b7d8e' }}>
-            Loading conversation…
-          </span>
+      <div className="flex-1 flex flex-col justify-between bg-[var(--bg)] p-6 md:p-10" role="status">
+        <div className="max-w-4xl mx-auto w-full space-y-6 pt-4">
+          <div className="flex justify-end">
+            <div className="h-12 w-64 rounded-2xl bg-[var(--surface-subtle)] animate-pulse" />
+          </div>
+          <div className="flex items-start gap-3">
+            <div className="w-8 h-8 rounded-[10px] bg-[var(--surface-subtle)] animate-pulse shrink-0" />
+            <div className="flex-1 max-w-xl space-y-2.5 bg-[var(--surface)] border border-[var(--border)] rounded-2xl p-5">
+              <div className="h-3.5 w-3/4 rounded bg-[var(--surface-subtle)] animate-pulse" />
+              <div className="h-3.5 w-full rounded bg-[var(--surface-subtle)] animate-pulse" />
+              <div className="h-3.5 w-2/3 rounded bg-[var(--surface-subtle)] animate-pulse" />
+            </div>
+          </div>
+        </div>
+        <div className="flex items-center justify-center gap-2 pb-4 text-xs font-semibold text-[var(--muted)]">
+          <Loader2 className="w-4 h-4 animate-spin text-[var(--bh-nile)]" />
+          <span>Loading conversation…</span>
         </div>
       </div>
     );
@@ -592,29 +649,59 @@ export function Dashboard({
 
   if (loadError) {
     return (
-      <div className="flex-1 flex items-center justify-center text-red-500">
-        <p className="text-sm bg-red-50 border border-red-200 px-4 py-3 rounded-xl">Warning: {loadError}</p>
+      <div className="flex-1 flex items-center justify-center bg-[var(--bg)] p-6">
+        <div
+          role="alert"
+          className="max-w-md w-full bg-[var(--surface)] border border-[#F4C6C6] rounded-2xl p-6 text-center shadow-[var(--elev-raised)] space-y-4"
+        >
+          <div className="w-11 h-11 rounded-xl bg-[var(--danger-soft)] text-[var(--danger)] flex items-center justify-center mx-auto">
+            <AlertTriangle className="w-5 h-5" />
+          </div>
+          <div className="space-y-1">
+            <h3 className="text-sm font-bold text-[var(--fg)]">Unable to load conversation</h3>
+            <p className="text-xs text-[var(--muted)] leading-relaxed">{loadError}</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setRetryNonce((n) => n + 1)}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-[10px] text-xs font-bold bg-[var(--bh-nile)] hover:bg-[var(--bh-nile-hover)] text-white transition-colors"
+          >
+            <RefreshCw className="w-3.5 h-3.5" />
+            Retry
+          </button>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col h-full bg-white">
+    <div className="flex flex-col h-full bg-[var(--bg)]">
       {isGa4 && (
-        <div className="px-4 sm:px-6 py-4 shrink-0 flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-100">
+        <div className="px-4 sm:px-6 py-3 shrink-0 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 bg-[var(--surface)] border-b border-[var(--border-soft)]">
           <div>
-            <h2 className="font-semibold text-sm" style={{ color: '#1a2a3a' }}>
-              Chat with {expertName}
-            </h2>
-            <p className="text-[10px] text-gray-400 mt-0.5">{subtitle}</p>
+            <h2 className="font-bold text-sm text-[var(--fg)]">Chat with {expertName}</h2>
+            <p className="text-[11px] text-[var(--muted)] mt-0.5">{subtitle}</p>
           </div>
           <div className="flex items-center gap-2">
             <button
+              type="button"
               onClick={() => setShowSettings((v) => !v)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-gray-50 border border-gray-100 text-gray-600 hover:bg-gray-100 transition-colors"
+              aria-expanded={showSettings}
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-[10px] text-xs font-semibold border transition-colors duration-150 ${
+                showSettings
+                  ? 'bg-[var(--bh-nile-soft)] border-[var(--bh-cerulean)] text-[var(--bh-nile)]'
+                  : 'bg-[var(--surface-warm)] border-[var(--border)] text-[var(--fg-2)] hover:bg-white hover:border-[var(--bh-cerulean)] hover:text-[var(--bh-nile)]'
+              }`}
             >
-              <Settings className="w-3.5 h-3.5 shrink-0" />
-              <span className="truncate">{ga4PropertyId ? `Property: ${ga4PropertyId}` : 'Set Property'}</span>
+              <span
+                className={`w-2 h-2 rounded-full shrink-0 ${
+                  oauthStatus.connected ? 'bg-[var(--bh-emerald)]' : 'bg-[var(--bh-buttercup)]'
+                }`}
+              />
+              <Settings className="w-3.5 h-3.5 shrink-0 text-[var(--bh-cerulean)]" />
+              <span className="truncate font-mono text-[11px]">
+                {ga4PropertyId ? `Property: ${ga4PropertyId}` : 'Set GA4 Property'}
+              </span>
             </button>
           </div>
         </div>
@@ -645,17 +732,14 @@ export function Dashboard({
       >
         {/* Single Drag-and-Drop Overlay */}
         {dragOver && (
-          <div
-            className={cn(
-              'absolute inset-2 z-30 backdrop-blur-sm border-2 border-dashed rounded-2xl flex items-center justify-center pointer-events-none',
-              isGa4 ? 'bg-orange-50/90 border-orange-300' : 'bg-blue-50/90 border-blue-300',
-            )}
-          >
-            <div className="text-center">
-              <UploadCloud className={cn('w-8 h-8 mx-auto mb-2', isGa4 ? 'text-orange-500' : 'text-[#1a3a5c]')} />
-              <p className={cn('text-sm font-semibold', isGa4 ? 'text-orange-700' : 'text-[#1a3a5c]')}>Drop files here</p>
-              <p className={cn('text-xs', isGa4 ? 'text-orange-500' : 'text-blue-600')}>
-                Images, PDF, Excel (.xlsx), Word (.docx), CSV & more — up to 25MB each
+          <div className="absolute inset-3 z-30 bg-[#EBF5F8]/95 backdrop-blur-sm border-2 border-dashed border-[var(--bh-cerulean)] rounded-2xl flex items-center justify-center pointer-events-none">
+            <div className="text-center px-6">
+              <div className="w-12 h-12 rounded-2xl bg-[var(--surface)] border border-[#C6DCE5] flex items-center justify-center mx-auto mb-3 shadow-sm">
+                <UploadCloud className="w-6 h-6 text-[var(--bh-nile)]" />
+              </div>
+              <p className="text-sm font-extrabold text-[var(--bh-nile)]">Drop files to attach</p>
+              <p className="text-xs text-[var(--muted)] mt-1">
+                Images, PDF, Excel (.xlsx), Word (.docx), CSV, JSON — up to 25MB each
               </p>
             </div>
           </div>
@@ -665,267 +749,301 @@ export function Dashboard({
           <div
             ref={messagesContainerRef}
             onScroll={handleContainerScroll}
-            className="flex-1 overflow-y-auto px-4 md:px-8 py-6 space-y-4 bg-gray-50/50"
+            className="flex-1 overflow-y-auto px-4 md:px-8 py-6 space-y-5 bg-[var(--bg)]"
           >
             {chatMessages.length === 0 ? (
-              <div className="h-full flex flex-col items-center justify-center gap-6 opacity-75 animate-fade-in">
-                <div className="p-6 rounded-[2.5rem] bg-gray-100/70 border border-gray-200/60 shadow-inner">
-                  <MessageSquare className="w-10 h-10 text-gray-400" />
+              <div className="h-full flex flex-col items-center justify-center max-w-3xl mx-auto px-2 py-8 animate-fade-in">
+                <div className="p-3.5 rounded-2xl bg-[var(--surface)] border border-[var(--border)] shadow-[var(--elev-raised)] mb-5">
+                  <BrightHorizonLogo mode={mode} className="w-11 h-11" />
                 </div>
-                <div className="text-center space-y-1">
-                  <p className="text-sm font-semibold text-gray-600">How can I help you today?</p>
-                  <p className="text-xs text-gray-400">Select a suggestion below or type your own question.</p>
+                <div className="text-center space-y-2 max-w-lg">
+                  <h2 className="text-2xl sm:text-[28px] font-light text-[var(--fg)] tracking-[-0.02em] leading-tight text-balance">
+                    How can I help with your{' '}
+                    <strong className="font-extrabold text-[var(--bh-nile)]">
+                      {isGa4 ? 'GA4 analytics?' : 'GTM container?'}
+                    </strong>
+                  </h2>
+                  <div className="w-11 h-1 bg-[var(--bh-buttercup)] mx-auto rounded-full" aria-hidden="true" />
+                  <p className="text-sm text-[var(--muted)] pt-1 leading-relaxed">{subtitle}</p>
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 w-full max-w-2xl px-4 mt-4">
+
+                {/* Bright Horizons Router-Style Prompt Cards */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5 w-full mt-8">
                   <AnimatePresence>
                     {suggestions.map((s, i) => (
                       <motion.button
                         key={s}
-                        initial={{ opacity: 0, y: 10 }}
+                        type="button"
+                        initial={{ opacity: 0, y: 8 }}
                         animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: i * 0.1 }}
-                        onClick={() => setChatInput(s)}
-                        className={cn(
-                          'p-3 text-left text-[11px] font-medium bg-white border border-gray-100 rounded-2xl transition-all shadow-sm active:scale-95 text-gray-600',
-                          isGa4
-                            ? 'hover:border-orange-200 hover:bg-orange-50/40'
-                            : 'hover:border-blue-200 hover:bg-blue-50/40',
-                        )}
+                        transition={{ delay: i * 0.06, duration: 0.2, ease: [0.2, 0, 0, 1] }}
+                        onClick={() => {
+                          setChatInput(s);
+                          textareaRef.current?.focus();
+                        }}
+                        className="group flex flex-col justify-between gap-3 p-4 text-left bg-[var(--surface)] border border-[var(--border)] rounded-[10px] shadow-[0_1px_3px_rgba(20,38,50,0.04)] hover:border-[var(--bh-cerulean)] hover:shadow-[0_8px_24px_rgba(26,71,95,0.09)] active:scale-[0.99] transition-all duration-150"
                       >
-                        {s}
+                        <div className="flex items-start gap-2.5">
+                          <span className="mt-0.5 p-1.5 rounded-lg bg-[var(--bh-nile-soft)] text-[var(--bh-cerulean)] shrink-0">
+                            <Sparkles className="w-3.5 h-3.5" />
+                          </span>
+                          <span className="text-xs font-semibold text-[var(--fg)] leading-relaxed">{s}</span>
+                        </div>
+                        <div className="flex items-center justify-end text-[11px] font-bold uppercase tracking-[0.06em] text-[var(--bh-nile)]">
+                          <span className="mr-1 opacity-75 group-hover:opacity-100 transition-opacity">Ask</span>
+                          <ChevronRight className="w-3.5 h-3.5 text-[var(--bh-buttercup-hover)] group-hover:translate-x-0.5 transition-transform duration-150" />
+                        </div>
                       </motion.button>
                     ))}
                   </AnimatePresence>
                 </div>
               </div>
             ) : (
-              <AnimatePresence mode="popLayout">
-                {chatMessages.map((msg, idx) => (
-                  <motion.div
-                    key={msg.id ?? idx}
-                    ref={(el: HTMLDivElement | null) => {
-                      const key = msg.id ?? `idx-${idx}`;
-                      if (el) messageRefs.current.set(key, el);
-                      else messageRefs.current.delete(key);
-                    }}
-                    data-msg-id={msg.id}
-                    initial={{ opacity: 0, y: 15, scale: 0.97 }}
-                    animate={{ opacity: 1, y: 0, scale: 1 }}
-                    exit={{ opacity: 0, scale: 0.97 }}
-                    transition={{
-                      type: 'spring',
-                      stiffness: 260,
-                      damping: 25,
-                      layout: { duration: 0.2 },
-                    }}
-                    layout="position"
-                    className={cn('flex w-full mb-2', msg.role === 'user' ? 'justify-end' : 'justify-start gap-3')}
-                  >
-                    {msg.role === 'model' && (
-                      <div className="shrink-0 mt-1">
-                        <div className="w-8 h-8 rounded-full bg-gray-50 border border-gray-100 flex items-center justify-center shadow-sm">
-                          <BrightHorizonLogo className="w-5 h-5" mode={mode} />
-                        </div>
-                      </div>
-                    )}
-                    <div
-                      className={cn(
-                        'max-w-[90%] md:max-w-[80%] rounded-[1.5rem] px-5 py-4 shadow-sm relative overflow-hidden',
-                        msg.role === 'user' ? 'text-white' : 'bg-white border border-gray-100 text-gray-900',
-                      )}
-                      style={
-                        msg.role === 'user'
-                          ? {
-                              background: isGa4
-                                ? 'linear-gradient(135deg, #e8710a, #f58634)'
-                                : 'linear-gradient(135deg, #1a3a5c, #1e4d7b)',
-                            }
-                          : {}
-                      }
-                    >
-                      {msg.role === 'user' ? (
-                        <div className="space-y-2">
-                          {msg.attachments && msg.attachments.length > 0 && (
-                            <div className="flex flex-wrap gap-2">
-                              {msg.attachments.map((att) => {
-                                const Icon = getFileIcon(att.mime_type, att.filename);
-                                const isImg = att.mime_type.startsWith('image/');
-                                const fileUrl = att.url || chatApi.getFileUrl(att.id);
-                                return (
-                                  <button
-                                    key={att.id}
-                                    type="button"
-                                    onClick={() =>
-                                      openAuthenticatedFile(fileUrl, chatApi).catch((err) =>
-                                        addToast({ type: 'error', title: 'Unable to open file', message: err.message }),
-                                      )
-                                    }
-                                    className="flex items-center gap-2 px-3 py-2 rounded-xl bg-white/20 border border-white/30 text-xs font-medium hover:bg-white/30 transition-colors text-left"
-                                  >
-                                    {isImg ? (
-                                      <AuthImage
-                                        src={fileUrl}
-                                        alt={att.filename}
-                                        chatApi={chatApi}
-                                        className="w-8 h-8 rounded-lg object-cover border border-white/30"
-                                      />
-                                    ) : (
-                                      <Icon className="w-4 h-4 shrink-0" />
-                                    )}
-                                    <span className="truncate max-w-[140px]">{att.filename}</span>
-                                    <span className="opacity-60 text-[10px]">{(att.size / 1024).toFixed(0)}KB</span>
-                                  </button>
-                                );
-                              })}
+              <div className="max-w-4xl mx-auto w-full space-y-4">
+                <AnimatePresence mode="popLayout">
+                  {chatMessages.map((msg, idx) => {
+                    const isStreamingThis =
+                      isStreaming && idx === chatMessages.length - 1 && msg.role === 'model';
+
+                    return (
+                      <motion.div
+                        key={msg.id ?? idx}
+                        ref={(el: HTMLDivElement | null) => {
+                          const key = msg.id ?? `idx-${idx}`;
+                          if (el) messageRefs.current.set(key, el);
+                          else messageRefs.current.delete(key);
+                        }}
+                        data-msg-id={msg.id}
+                        initial={{ opacity: 0, y: 12, scale: 0.985 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        exit={{ opacity: 0, scale: 0.985 }}
+                        transition={{
+                          type: 'spring',
+                          stiffness: 280,
+                          damping: 26,
+                          layout: { duration: 0.18 },
+                        }}
+                        layout="position"
+                        className={cn('flex w-full', msg.role === 'user' ? 'justify-end' : 'justify-start gap-3')}
+                      >
+                        {msg.role === 'model' && (
+                          <div className="shrink-0 mt-0.5">
+                            <div className="w-8 h-8 rounded-[10px] bg-[var(--surface)] border border-[var(--border)] flex items-center justify-center shadow-[0_1px_3px_rgba(20,38,50,0.05)]">
+                              <BrightHorizonLogo className="w-5 h-5" mode={mode} />
                             </div>
+                          </div>
+                        )}
+                        <div
+                          className={cn(
+                            'max-w-[92%] md:max-w-[82%] relative overflow-hidden',
+                            msg.role === 'user'
+                              ? 'bg-[var(--bh-nile)] text-white rounded-2xl rounded-br-sm px-5 py-3.5 shadow-[0_4px_14px_rgba(26,71,95,0.16)]'
+                              : 'bg-[var(--surface)] border border-[var(--border)] text-[var(--fg-2)] rounded-2xl rounded-tl-sm px-5 py-4 shadow-[0_1px_3px_rgba(20,38,50,0.04)]',
                           )}
-                          {msg.text && <p className="text-sm leading-relaxed whitespace-pre-wrap">{msg.text}</p>}
-                        </div>
-                      ) : (
-                        <motion.div
-                          initial={{ opacity: 0 }}
-                          animate={{ opacity: 1 }}
-                          transition={{ duration: 0.4 }}
-                          className="prose prose-sm max-w-none prose-p:leading-relaxed prose-headings:text-gray-800 prose-strong:text-gray-800"
                         >
-                          <Suspense fallback={<div className="h-10 animate-pulse bg-gray-100 rounded" />}>
-                            <Markdown
-                              remarkPlugins={[remarkGfm, remarkBreaks]}
-                              components={{
-                                table: ({ node: _node, ...props }: any) => (
-                                  <div className="relative group/table my-6">
-                                    <div className="overflow-x-auto border border-gray-100 rounded-xl shadow-sm bg-white">
-                                      <table {...props} className="w-full text-xs border-collapse" />
-                                    </div>
-                                    <CopyTableButton />
-                                  </div>
-                                ),
-                                thead: ({ node: _node, ...props }: any) => (
-                                  <thead {...props} className="bg-gray-50/80 border-b border-gray-100" />
-                                ),
-                                th: ({ node: _node, ...props }: any) => (
-                                  <th
-                                    {...props}
-                                    className="px-4 py-3 text-left font-semibold text-gray-600 uppercase tracking-wider whitespace-nowrap"
-                                  />
-                                ),
-                                td: ({ node: _node, ...props }: any) => (
-                                  <td {...props} className="px-4 py-3 border-b border-gray-50 text-gray-700 font-medium" />
-                                ),
-                                tr: ({ node: _node, ...props }: any) => (
-                                  <tr {...props} className="hover:bg-gray-50/50 transition-colors" />
-                                ),
-                                img: ({ node: _node, ...props }: any) => (
-                                  <figure className="my-6">
-                                    <AuthImage
-                                      src={props.src}
-                                      alt={props.alt}
-                                      chatApi={chatApi}
-                                      className="rounded-xl border border-gray-100 shadow-sm max-w-full h-auto"
-                                      loading="lazy"
-                                    />
-                                    {props.alt && (
-                                      <figcaption className="text-center text-[10px] text-gray-400 mt-2 font-medium uppercase tracking-wider">
-                                        {props.alt}
-                                      </figcaption>
-                                    )}
-                                  </figure>
-                                ),
-                                h3: ({ node: _node, children, ...props }: any) => {
-                                  const text = extractText(children);
-                                  let severityClass = '';
-                                  if (text.includes('Critical')) severityClass = 'severity-card severity-critical';
-                                  else if (text.includes('High')) severityClass = 'severity-card severity-high';
-                                  else if (text.includes('Medium')) severityClass = 'severity-card severity-medium';
-                                  else if (text.includes('Low')) severityClass = 'severity-card severity-low';
-
-                                  if (severityClass) {
+                          {msg.role === 'user' ? (
+                            <div className="space-y-2.5">
+                              {msg.attachments && msg.attachments.length > 0 && (
+                                <div className="flex flex-wrap gap-2">
+                                  {msg.attachments.map((att) => {
+                                    const Icon = getFileIcon(att.mime_type, att.filename);
+                                    const isImg = att.mime_type.startsWith('image/');
+                                    const fileUrl = att.url || chatApi.getFileUrl(att.id);
                                     return (
-                                      <h3 className={severityClass} {...props}>
-                                        {children}
-                                      </h3>
-                                    );
-                                  }
-                                  return (
-                                    <h3 className="text-lg font-bold text-gray-800 mt-8 mb-4" {...props}>
-                                      {children}
-                                    </h3>
-                                  );
-                                },
-                                blockquote: ({ node: _node, ...props }: any) => (
-                                  <blockquote
-                                    className="border-l-4 border-gray-200 pl-4 my-4 italic text-gray-600 bg-gray-50/50 py-2 rounded-r-lg"
-                                    {...props}
-                                  />
-                                ),
-                              }}
-                            >
-                              {msg.text}
-                            </Markdown>
-                          </Suspense>
-
-                          {isStreaming && idx === chatMessages.length - 1 && msg.role === 'model' && !msg.text && (
-                            <div className="flex gap-1 items-center py-2 px-1">
-                              {[0, 0.2, 0.4].map((delay, dotIdx) => (
-                                <motion.div
-                                  key={dotIdx}
-                                  animate={{ opacity: [0.4, 1, 0.4] }}
-                                  transition={{ repeat: Infinity, duration: 1.5, delay }}
-                                  className={cn('w-1.5 h-1.5 rounded-full', isGa4 ? 'bg-orange-400' : 'bg-[#1a3a5c]')}
-                                />
-                              ))}
-                            </div>
-                          )}
-
-                          {/* Belt-and-suspenders: render charts that weren't in the markdown */}
-                          {msg.charts && msg.charts.length > 0 && (
-                            <div className="mt-4 space-y-6">
-                              {msg.charts.map((url, i) => {
-                                if (msg.text.includes(url)) return null;
-                                return (
-                                  <figure key={url} className="chart-figure animate-chart-in">
-                                    <AuthImage
-                                      src={url}
-                                      alt={`Chart ${i + 1}`}
-                                      chatApi={chatApi}
-                                      className="w-full rounded-xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow"
-                                      loading="lazy"
-                                    />
-                                    <figcaption className="mt-2 flex items-center justify-between">
-                                      <span className="text-[10px] text-gray-400 font-medium uppercase tracking-wider">
-                                        Generated Chart {i + 1}
-                                      </span>
                                       <button
+                                        key={att.id}
                                         type="button"
                                         onClick={() =>
-                                          openAuthenticatedFile(url, chatApi).catch((err) =>
-                                            addToast({ type: 'error', title: 'Unable to open chart', message: err.message }),
+                                          openAuthenticatedFile(fileUrl, chatApi).catch((err) =>
+                                            addToast({ type: 'error', title: 'Unable to open file', message: err.message }),
                                           )
                                         }
-                                        className="text-[10px] text-orange-500 hover:text-orange-600 font-bold uppercase tracking-widest"
+                                        className="flex items-center gap-2 px-3 py-1.5 rounded-[10px] bg-white/15 border border-white/25 text-xs font-semibold hover:bg-white/25 transition-colors text-left"
                                       >
-                                        Open Full Size ↗
+                                        {isImg ? (
+                                          <AuthImage
+                                            src={fileUrl}
+                                            alt={att.filename}
+                                            chatApi={chatApi}
+                                            className="w-7 h-7 rounded-md object-cover border border-white/30"
+                                          />
+                                        ) : (
+                                          <Icon className="w-4 h-4 shrink-0 text-[#F0BD1B]" />
+                                        )}
+                                        <span className="truncate max-w-[140px]">{att.filename}</span>
+                                        <span className="opacity-75 text-[10px] tabular-nums">
+                                          {(att.size / 1024).toFixed(0)}KB
+                                        </span>
                                       </button>
-                                    </figcaption>
-                                  </figure>
-                                );
-                              })}
+                                    );
+                                  })}
+                                </div>
+                              )}
+                              {msg.text && <p className="text-sm leading-relaxed whitespace-pre-wrap">{msg.text}</p>}
                             </div>
+                          ) : (
+                            <motion.div
+                              initial={{ opacity: 0 }}
+                              animate={{ opacity: 1 }}
+                              transition={{ duration: 0.25 }}
+                              className="prose prose-sm max-w-none"
+                            >
+                              <Suspense fallback={<div className="h-10 animate-pulse bg-[var(--surface-subtle)] rounded-lg" />}>
+                                <Markdown
+                                  remarkPlugins={[remarkGfm, remarkBreaks]}
+                                  components={{
+                                    table: ({ node: _node, ...props }: any) => (
+                                      <div className="relative group/table my-5">
+                                        <div className="overflow-x-auto border border-[var(--border)] rounded-xl bg-[var(--surface)]">
+                                          <table {...props} className="w-full text-xs border-collapse" />
+                                        </div>
+                                        <CopyTableButton />
+                                      </div>
+                                    ),
+                                    thead: ({ node: _node, ...props }: any) => (
+                                      <thead {...props} className="bg-[var(--bg)] border-b border-[var(--border)]" />
+                                    ),
+                                    th: ({ node: _node, ...props }: any) => (
+                                      <th
+                                        {...props}
+                                        className="px-4 py-3 text-left font-bold text-[var(--bh-nile)] uppercase tracking-[0.07em] whitespace-nowrap"
+                                      />
+                                    ),
+                                    td: ({ node: _node, ...props }: any) => (
+                                      <td
+                                        {...props}
+                                        className="px-4 py-3 border-b border-[var(--border-soft)] text-[var(--fg-2)] font-medium"
+                                      />
+                                    ),
+                                    tr: ({ node: _node, ...props }: any) => (
+                                      <tr {...props} className="hover:bg-[var(--surface-warm)] transition-colors" />
+                                    ),
+                                    img: ({ node: _node, ...props }: any) => (
+                                      <figure className="my-5">
+                                        <AuthImage
+                                          src={props.src}
+                                          alt={props.alt}
+                                          chatApi={chatApi}
+                                          className="rounded-xl border border-[var(--border)] shadow-sm max-w-full h-auto"
+                                          loading="lazy"
+                                        />
+                                        {props.alt && (
+                                          <figcaption className="text-center text-[11px] text-[var(--muted)] mt-2 font-semibold uppercase tracking-[0.07em]">
+                                            {props.alt}
+                                          </figcaption>
+                                        )}
+                                      </figure>
+                                    ),
+                                    h3: ({ node: _node, children, ...props }: any) => {
+                                      const text = extractText(children);
+                                      let severityClass = '';
+                                      if (text.includes('Critical')) severityClass = 'severity-card severity-critical';
+                                      else if (text.includes('High')) severityClass = 'severity-card severity-high';
+                                      else if (text.includes('Medium')) severityClass = 'severity-card severity-medium';
+                                      else if (text.includes('Low')) severityClass = 'severity-card severity-low';
+
+                                      if (severityClass) {
+                                        return (
+                                          <h3 className={severityClass} {...props}>
+                                            {children}
+                                          </h3>
+                                        );
+                                      }
+                                      return (
+                                        <h3 className="text-[17px] font-extrabold text-[var(--fg)] mt-7 mb-3" {...props}>
+                                          {children}
+                                        </h3>
+                                      );
+                                    },
+                                    blockquote: ({ node: _node, ...props }: any) => (
+                                      <blockquote
+                                        className="border-l-4 border-[var(--bh-cerulean)] pl-4 pr-3 my-4 italic text-[var(--fg-2)] bg-[var(--bg)] py-2.5 rounded-r-xl"
+                                        {...props}
+                                      />
+                                    ),
+                                  }}
+                                >
+                                  {msg.text}
+                                </Markdown>
+                              </Suspense>
+
+                              {isStreamingThis && !msg.text && (
+                                <div className="flex items-center gap-2.5 py-1.5" role="status">
+                                  <div className="flex gap-1 items-center">
+                                    {[0, 0.18, 0.36].map((delay, dotIdx) => (
+                                      <motion.div
+                                        key={dotIdx}
+                                        animate={{ opacity: [0.35, 1, 0.35] }}
+                                        transition={{ repeat: Infinity, duration: 1.3, delay }}
+                                        className={cn(
+                                          'w-2 h-2 rounded-full',
+                                          dotIdx === 1 ? 'bg-[var(--bh-buttercup)]' : 'bg-[var(--bh-cerulean)]',
+                                        )}
+                                      />
+                                    ))}
+                                  </div>
+                                  <span className="text-xs font-semibold text-[var(--muted)]">Analyzing…</span>
+                                </div>
+                              )}
+
+                              {/* Belt-and-suspenders: render charts that weren't in the markdown */}
+                              {msg.charts && msg.charts.length > 0 && (
+                                <div className="mt-4 space-y-5">
+                                  {msg.charts.map((url, i) => {
+                                    if (msg.text.includes(url)) return null;
+                                    return (
+                                      <figure key={url} className="chart-figure animate-chart-in">
+                                        <AuthImage
+                                          src={url}
+                                          alt={`Chart ${i + 1}`}
+                                          chatApi={chatApi}
+                                          className="w-full rounded-xl border border-[var(--border)] shadow-sm hover:shadow-md transition-shadow"
+                                          loading="lazy"
+                                        />
+                                        <figcaption className="mt-2 flex items-center justify-between">
+                                          <span className="text-[11px] text-[var(--muted)] font-semibold uppercase tracking-[0.07em]">
+                                            Generated Chart {i + 1}
+                                          </span>
+                                          <button
+                                            type="button"
+                                            onClick={() =>
+                                              openAuthenticatedFile(url, chatApi).catch((err) =>
+                                                addToast({ type: 'error', title: 'Unable to open chart', message: err.message }),
+                                              )
+                                            }
+                                            className="text-[11px] text-[var(--bh-cerulean)] hover:text-[var(--bh-nile)] font-bold uppercase tracking-[0.06em]"
+                                          >
+                                            Open Full Size ↗
+                                          </button>
+                                        </figcaption>
+                                      </figure>
+                                    );
+                                  })}
+                                </div>
+                              )}
+
+                              {!isStreamingThis && msg.text && (
+                                <div className="mt-3 pt-2 border-t border-[var(--border-soft)] flex items-center justify-end not-prose">
+                                  <CopyResponseButton text={msg.text} />
+                                </div>
+                              )}
+                            </motion.div>
                           )}
-                        </motion.div>
-                      )}
-                    </div>
-                  </motion.div>
-                ))}
-              </AnimatePresence>
+                        </div>
+                      </motion.div>
+                    );
+                  })}
+                </AnimatePresence>
+              </div>
             )}
             <div ref={messagesEndRef} />
           </div>
 
-          <div className="shrink-0 px-4 md:px-8 py-4 border-t border-gray-100 bg-white/80 backdrop-blur-md relative">
+          {/* Grounded Bright Horizons Composer Dock */}
+          <div className="shrink-0 px-4 md:px-8 py-3.5 border-t border-[var(--border)] bg-[var(--surface)] relative">
             {/* Pending attachments preview */}
             {pendingAttachments.length > 0 && (
-              <div className="max-w-5xl mx-auto mb-3 flex flex-wrap gap-2">
+              <div className="max-w-4xl mx-auto mb-2.5 flex flex-wrap gap-2">
                 {pendingAttachments.map((att) => {
                   const Icon = getFileIcon(att.mime_type, att.filename);
                   const isImg = att.mime_type.startsWith('image/');
@@ -933,28 +1051,31 @@ export function Dashboard({
                   return (
                     <div
                       key={att.id}
-                      className="flex items-center gap-2 pl-2 pr-1 py-1.5 rounded-xl bg-gray-50 border border-gray-200 text-xs font-medium shadow-sm"
+                      className="flex items-center gap-2 pl-2 pr-1 py-1.5 rounded-[10px] bg-[var(--surface-warm)] border border-[var(--border)] text-xs font-semibold shadow-sm"
                     >
                       {isImg ? (
                         <AuthImage
                           src={fileUrl}
                           alt={att.filename}
                           chatApi={chatApi}
-                          className="w-7 h-7 rounded-lg object-cover border border-gray-200"
+                          className="w-7 h-7 rounded-md object-cover border border-[var(--border)]"
                         />
                       ) : (
-                        <div className="w-7 h-7 rounded-lg bg-white border border-gray-200 flex items-center justify-center">
-                          <Icon className="w-3.5 h-3.5 text-gray-600" />
+                        <div className="w-7 h-7 rounded-md bg-white border border-[var(--border)] flex items-center justify-center">
+                          <Icon className="w-3.5 h-3.5 text-[var(--bh-nile)]" />
                         </div>
                       )}
                       <div className="flex flex-col leading-none">
-                        <span className="truncate max-w-[120px] text-gray-700">{att.filename}</span>
-                        <span className="text-[10px] text-gray-400">{(att.size / 1024).toFixed(0)}KB</span>
+                        <span className="truncate max-w-[130px] text-[var(--fg)]">{att.filename}</span>
+                        <span className="text-[10px] text-[var(--muted)] tabular-nums mt-0.5">
+                          {(att.size / 1024).toFixed(0)}KB
+                        </span>
                       </div>
                       <button
                         type="button"
                         onClick={() => removePending(att.id)}
-                        className="p-1 hover:bg-gray-200 rounded-lg text-gray-400 hover:text-red-500 transition-colors"
+                        aria-label={`Remove ${att.filename}`}
+                        className="p-1 hover:bg-[var(--danger-soft)] rounded-md text-[var(--muted)] hover:text-[var(--danger)] transition-colors"
                         title="Remove attachment"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
@@ -963,7 +1084,7 @@ export function Dashboard({
                   );
                 })}
                 {isUploading && (
-                  <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-blue-50 border border-blue-200 text-xs font-medium text-blue-600">
+                  <div className="flex items-center gap-2 px-3 py-1.5 rounded-[10px] bg-[var(--bh-nile-soft)] border border-[#C6DCE5] text-xs font-semibold text-[var(--bh-nile)]">
                     <Loader2 className="w-4 h-4 animate-spin" /> Uploading…
                   </div>
                 )}
@@ -975,14 +1096,15 @@ export function Dashboard({
                 e.preventDefault();
                 handleSendChat();
               }}
-              className="flex items-end gap-3 max-w-5xl mx-auto"
+              className="max-w-4xl mx-auto"
             >
-              <div className="flex-1 relative group flex items-end gap-2">
+              <div className="flex items-end gap-2 p-2 rounded-2xl bg-[var(--surface-warm)] border border-[var(--border)] focus-within:bg-white focus-within:border-[var(--bh-cerulean)] focus-within:ring-4 focus-within:ring-[#3C889E]/12 transition-all duration-150">
                 <button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
                   disabled={isSendingChat || isUploading}
-                  className="shrink-0 p-3.5 rounded-2xl bg-gray-50 border border-gray-100 text-gray-500 hover:bg-white hover:border-gray-200 hover:text-gray-700 transition-all disabled:opacity-40"
+                  aria-label="Attach files"
+                  className="shrink-0 p-2.5 rounded-[10px] text-[var(--muted)] hover:bg-[var(--surface-subtle)] hover:text-[var(--bh-nile)] transition-colors disabled:opacity-40"
                   title="Attach files (images, PDF, Excel, Word, CSV, JSON)"
                 >
                   <Paperclip className="w-5 h-5" />
@@ -1010,104 +1132,105 @@ export function Dashboard({
                       }
                     }}
                     placeholder={placeholder}
+                    aria-label={placeholder}
                     disabled={isSendingChat}
-                    className={cn(
-                      'w-full px-5 py-3.5 rounded-2xl bg-gray-50 border border-gray-100 transition-all outline-none text-sm font-medium placeholder:text-gray-400 resize-none leading-relaxed max-h-40 overflow-y-auto',
-                      'focus:bg-white focus:border-opacity-50',
-                      isGa4
-                        ? 'focus:border-orange-200 focus:ring-4 focus:ring-orange-500/5'
-                        : 'focus:border-blue-200 focus:ring-4 focus:ring-blue-500/5',
-                    )}
+                    className="w-full px-2 py-2 bg-transparent outline-none text-sm font-medium text-[var(--fg)] placeholder:text-[var(--muted)] resize-none leading-relaxed max-h-40 overflow-y-auto"
                   />
                   {isStreaming && (
-                    <div className="absolute right-4 bottom-3.5">
-                      <Loader2 className={cn('w-4 h-4 animate-spin', isGa4 ? 'text-orange-500' : 'text-[#1a3a5c]')} />
+                    <div className="absolute right-2 bottom-2.5">
+                      <Loader2 className="w-4 h-4 animate-spin text-[var(--bh-cerulean)]" />
                     </div>
                   )}
                 </div>
-              </div>
 
-              {isSendingChat ? (
-                <button
-                  type="button"
-                  onClick={handleStopStreaming}
-                  className="px-5 py-3.5 rounded-2xl text-white font-bold flex items-center gap-2 transition-all shadow-lg active:scale-95 bg-gray-800 hover:bg-gray-900"
-                  title="Stop generating"
-                >
-                  <Square className="w-4 h-4 fill-current" />
-                  <span className="hidden sm:inline">Stop</span>
-                </button>
-              ) : (
-                <button
-                  type="submit"
-                  disabled={(!chatInput.trim() && pendingAttachments.length === 0) || isUploading}
-                  className="px-6 py-3.5 rounded-2xl text-white font-bold flex items-center gap-2 transition-all shadow-lg active:scale-95 disabled:opacity-40 disabled:shadow-none"
-                  style={{
-                    background: isGa4
-                      ? 'linear-gradient(135deg, #e8710a, #f58634)'
-                      : 'linear-gradient(135deg, #1a3a5c, #1e4d7b)',
-                  }}
-                >
-                  <Send className="w-5 h-5" />
-                  <span className="hidden sm:inline">Send</span>
-                </button>
-              )}
+                {isSendingChat ? (
+                  <button
+                    type="button"
+                    onClick={handleStopStreaming}
+                    className="shrink-0 px-4 py-2.5 rounded-[10px] text-white text-xs font-bold flex items-center gap-2 transition-all active:scale-[0.98] bg-[var(--bh-nile-deep)] hover:bg-[var(--bh-nile)] shadow-sm"
+                    title="Stop generating"
+                  >
+                    <Square className="w-3.5 h-3.5 fill-current" />
+                    <span className="hidden sm:inline">Stop</span>
+                  </button>
+                ) : (
+                  <button
+                    type="submit"
+                    disabled={(!chatInput.trim() && pendingAttachments.length === 0) || isUploading}
+                    aria-label="Send message"
+                    className="shrink-0 px-4 py-2.5 rounded-[10px] bg-[var(--bh-buttercup)] hover:bg-[var(--bh-buttercup-hover)] text-[var(--bh-nile-deep)] text-xs font-extrabold flex items-center gap-2 transition-all shadow-[0_2px_8px_rgba(240,189,27,0.28)] active:scale-[0.98] disabled:opacity-40 disabled:shadow-none"
+                  >
+                    <Send className="w-4 h-4 stroke-[2.25]" />
+                    <span className="hidden sm:inline">Send</span>
+                  </button>
+                )}
+              </div>
             </form>
-            <p className="text-[9px] text-center text-gray-400 mt-3 font-medium uppercase tracking-widest opacity-50">
-              Powered by BrightHorizon AI Engine • Attach images, PDFs, Excel (.xlsx), Word (.docx), CSV (25MB max)
+            <p className="text-[11px] text-center text-[var(--muted)] mt-2.5 font-medium">
+              Powered by BrightHorizon AI Engine • Attach images, PDFs, Excel, Word, CSV, or JSON (25MB max)
             </p>
           </div>
         </div>
 
         {/* Token expired re-auth modal */}
         {showTokenExpiredModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm animate-fade-in">
-            <div className="bg-white rounded-3xl shadow-2xl max-w-md w-full mx-4 overflow-hidden animate-scale-in">
-              <div className="px-8 pt-8 pb-6">
-                <div className="flex items-start justify-between mb-6">
-                  <div className="p-3 rounded-2xl bg-amber-50 border border-amber-100">
-                    <AlertTriangle className="w-7 h-7 text-amber-500" />
+          <div
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="token-expired-title"
+            className="fixed inset-0 z-50 flex items-center justify-center bg-[#0E2633]/45 backdrop-blur-sm animate-fade-in p-4"
+          >
+            <div className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl shadow-[var(--elev-modal)] max-w-md w-full overflow-hidden animate-scale-in">
+              <div className="px-7 pt-7 pb-5">
+                <div className="flex items-start justify-between mb-5">
+                  <div className="p-3 rounded-xl bg-[var(--bh-buttercup-soft)] border border-[var(--bh-buttercup-border)]">
+                    <AlertTriangle className="w-6 h-6 text-[#7D5B00]" />
                   </div>
                   <button
+                    type="button"
                     onClick={() => setShowTokenExpiredModal(false)}
-                    className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-50 rounded-xl transition-all"
+                    aria-label="Dismiss session expired notice"
+                    className="p-2 text-[var(--muted)] hover:text-[var(--fg)] hover:bg-[var(--surface-subtle)] rounded-[10px] transition-colors"
                   >
                     <X className="w-4 h-4" />
                   </button>
                 </div>
-                <h3 className="text-lg font-bold text-gray-900 mb-2">Session Expired</h3>
-                <p className="text-sm text-gray-500 leading-relaxed mb-1">
+                <h3 id="token-expired-title" className="text-lg font-extrabold text-[var(--fg)] mb-2">
+                  GA4 Session Expired
+                </h3>
+                <p className="text-sm text-[var(--fg-2)] leading-relaxed mb-3">
                   Your Google Analytics authentication has expired or was revoked. This typically happens when:
                 </p>
-                <ul className="text-xs text-gray-400 mb-6 space-y-1.5 list-none">
+                <ul className="text-xs text-[var(--muted)] mb-5 space-y-2 list-none">
                   <li className="flex items-start gap-2">
-                    <span className="mt-0.5 w-1.5 h-1.5 rounded-full bg-amber-300 shrink-0" />
-                    Your Google session timed out (after ~6 months of inactivity)
+                    <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-[var(--bh-buttercup)] shrink-0" />
+                    Your Google session timed out after extended inactivity
                   </li>
                   <li className="flex items-start gap-2">
-                    <span className="mt-0.5 w-1.5 h-1.5 rounded-full bg-amber-300 shrink-0" />
-                    You changed your Google password
+                    <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-[var(--bh-buttercup)] shrink-0" />
+                    You changed your Google account password
                   </li>
                   <li className="flex items-start gap-2">
-                    <span className="mt-0.5 w-1.5 h-1.5 rounded-full bg-amber-300 shrink-0" />
-                    Access was revoked in your Google Account settings
+                    <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-[var(--bh-buttercup)] shrink-0" />
+                    Access was revoked in your Google Account security settings
                   </li>
                 </ul>
               </div>
-              <div className="px-8 pb-8 flex gap-3">
+              <div className="px-7 pb-7 flex gap-3">
                 <button
+                  type="button"
                   onClick={() => setShowTokenExpiredModal(false)}
-                  className="flex-1 px-5 py-3 rounded-xl text-sm font-semibold text-gray-600 bg-gray-50 hover:bg-gray-100 border border-gray-100 transition-all"
+                  className="flex-1 px-4 py-2.5 rounded-[10px] text-sm font-semibold text-[var(--fg-2)] bg-[var(--surface-warm)] hover:bg-[var(--surface-subtle)] border border-[var(--border)] transition-colors"
                 >
                   Dismiss
                 </button>
                 <button
+                  type="button"
                   onClick={() => {
                     setShowTokenExpiredModal(false);
                     handleConnectGA4();
                   }}
-                  className="flex-1 flex items-center justify-center gap-2 px-5 py-3 rounded-xl text-sm font-bold text-white transition-all shadow-lg shadow-orange-500/20 active:scale-95"
-                  style={{ background: 'linear-gradient(135deg, #e8710a, #f58634)' }}
+                  className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-[10px] text-sm font-extrabold bg-[var(--bh-buttercup)] hover:bg-[var(--bh-buttercup-hover)] text-[var(--bh-nile-deep)] shadow-[0_3px_12px_rgba(240,189,27,0.28)] active:scale-[0.98] transition-all"
                 >
                   <RefreshCw className="w-4 h-4" />
                   Reconnect GA4

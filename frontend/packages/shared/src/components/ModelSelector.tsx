@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { ChevronDown, Sparkles, Zap, Cpu, Brain } from 'lucide-react';
+import { ChevronDown, Sparkles, Zap, Cpu, Brain, Check } from 'lucide-react';
 import type { AppMode, ModelOption } from '../services/chatApi';
 
 export const GEMINI_MODELS: ModelOption[] = [
@@ -50,7 +50,7 @@ interface ModelSelectorProps {
   };
 }
 
-export function ModelSelector({ mode, selectedModel, onModelChange, chatApi }: ModelSelectorProps) {
+export function ModelSelector({ selectedModel, onModelChange, chatApi }: ModelSelectorProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [models, setModels] = useState<ModelOption[]>(GEMINI_MODELS);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -76,10 +76,6 @@ export function ModelSelector({ mode, selectedModel, onModelChange, chatApi }: M
   const selected = currentModelsList.find((m) => m.id === selectedModel) ?? currentModelsList[0];
   const SelectedIcon = iconMap[selected.icon] ?? Sparkles;
 
-  const accentColor = mode === 'ga4' ? '#e8710a' : '#1a3a5c';
-  const accentLight = mode === 'ga4' ? '#fef3e8' : '#e8eef4';
-  const accentBorder = mode === 'ga4' ? '#f5e0cc' : '#dce4ec';
-
   useEffect(() => {
     if (!isOpen) return;
     function handleClickOutside(e: MouseEvent) {
@@ -87,105 +83,107 @@ export function ModelSelector({ mode, selectedModel, onModelChange, chatApi }: M
         setIsOpen(false);
       }
     }
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape') setIsOpen(false);
+    }
     document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
   }, [isOpen]);
 
   return (
     <div ref={dropdownRef} className="relative" style={{ zIndex: 50 }}>
       <button
+        type="button"
         onClick={() => setIsOpen((v) => !v)}
-        className="flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all duration-200 border select-none"
-        style={{
-          backgroundColor: isOpen ? accentLight : '#fafbfc',
-          borderColor: isOpen ? accentBorder : '#e5e7eb',
-          color: isOpen ? accentColor : '#4b5563',
-        }}
+        className={`flex items-center gap-2 px-3 py-1.5 rounded-[10px] text-xs font-semibold transition-colors duration-150 border select-none ${
+          isOpen
+            ? 'bg-[var(--bh-nile-soft)] border-[var(--bh-cerulean)] text-[var(--bh-nile)]'
+            : 'bg-[var(--surface-warm)] border-[var(--border)] text-[var(--fg-2)] hover:bg-[var(--surface)] hover:border-[var(--bh-cerulean)] hover:text-[var(--bh-nile)]'
+        }`}
         title="Select AI Model"
         id="model-selector-btn"
+        aria-expanded={isOpen}
+        aria-haspopup="listbox"
       >
-        <SelectedIcon className="w-3.5 h-3.5 shrink-0" style={{ color: accentColor }} />
+        <SelectedIcon className="w-3.5 h-3.5 shrink-0 text-[var(--bh-cerulean)]" />
         <span className="truncate max-w-[140px]">{selected.name}</span>
         <ChevronDown
-          className="w-3 h-3 shrink-0 transition-transform duration-200"
+          className="w-3 h-3 shrink-0 text-[var(--muted)] transition-transform duration-150"
           style={{ transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)' }}
         />
       </button>
 
       {isOpen && (
         <div
-          className="absolute left-0 top-full mt-2 w-72 rounded-2xl shadow-2xl border overflow-hidden"
+          role="listbox"
+          aria-label="Select AI Model"
+          className="absolute left-0 top-full mt-2 w-72 rounded-2xl shadow-[var(--elev-modal)] border border-[var(--border)] bg-[var(--surface)] overflow-hidden"
           style={{
-            backgroundColor: '#ffffff',
-            borderColor: '#e5e7eb',
-            animation: 'modelDropdownIn 0.2s cubic-bezier(0.16, 1, 0.3, 1)',
+            animation: 'modelDropdownIn 180ms cubic-bezier(0.2, 0, 0, 1)',
           }}
         >
-          <div className="px-4 pt-3 pb-2">
-            <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400">
+          <div className="px-4 pt-3 pb-2 border-b border-[var(--border-soft)]">
+            <p className="text-[10px] font-bold uppercase tracking-[0.08em] text-[var(--muted)]">
               Select Model
             </p>
           </div>
-          <div className="px-2 pb-2 space-y-0.5 overflow-y-auto" style={{ maxHeight: '320px' }}>
+          <div className="p-2 space-y-1 overflow-y-auto" style={{ maxHeight: '320px' }}>
             {currentModelsList.map((model) => {
               const Icon = iconMap[model.icon] ?? Sparkles;
               const isSelected = model.id === selectedModel;
               return (
                 <button
                   key={model.id}
+                  type="button"
+                  role="option"
+                  aria-selected={isSelected}
                   onClick={() => {
                     onModelChange(model.id);
                     setIsOpen(false);
                   }}
-                  className="w-full flex items-start gap-3 px-3 py-2.5 rounded-xl transition-all duration-150 text-left group hover:bg-gray-50"
-                  style={{
-                    backgroundColor: isSelected ? accentLight : undefined,
-                    borderWidth: '1px',
-                    borderStyle: 'solid',
-                    borderColor: isSelected ? accentBorder : 'transparent',
-                  }}
+                  className={`w-full flex items-start gap-3 px-3 py-2.5 rounded-[10px] transition-colors duration-150 text-left border ${
+                    isSelected
+                      ? 'bg-[var(--bh-nile-soft)] border-[#C6DCE5]'
+                      : 'bg-transparent border-transparent hover:bg-[var(--surface-warm)]'
+                  }`}
                   id={`model-option-${model.id}`}
                 >
                   <div
-                    className="mt-0.5 p-1.5 rounded-lg shrink-0"
-                    style={{
-                      backgroundColor: isSelected ? accentColor : '#f3f4f6',
-                    }}
+                    className={`mt-0.5 p-1.5 rounded-lg shrink-0 ${
+                      isSelected ? 'bg-[var(--bh-nile)] text-white' : 'bg-[var(--surface-subtle)] text-[var(--muted)]'
+                    }`}
                   >
-                    <Icon
-                      className="w-3.5 h-3.5"
-                      style={{ color: isSelected ? '#ffffff' : '#9ca3af' }}
-                    />
+                    <Icon className="w-3.5 h-3.5" />
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
                       <span
-                        className="text-xs font-semibold truncate"
-                        style={{ color: isSelected ? accentColor : '#374151' }}
+                        className={`text-xs font-bold truncate ${
+                          isSelected ? 'text-[var(--bh-nile)]' : 'text-[var(--fg)]'
+                        }`}
                       >
                         {model.name}
                       </span>
                       {model.badge && (
                         <span
-                          className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-md"
-                          style={{
-                            backgroundColor: model.badge === 'New' ? '#ecfdf5' : accentLight,
-                            color: model.badge === 'New' ? '#059669' : accentColor,
-                          }}
+                          className={`text-[9px] font-bold uppercase tracking-[0.06em] px-1.5 py-0.5 rounded-md ${
+                            model.badge === 'New'
+                              ? 'bg-[var(--bh-emerald-soft)] text-[var(--bh-emerald)]'
+                              : 'bg-[var(--bh-buttercup-soft)] text-[#7D5B00]'
+                          }`}
                         >
                           {model.badge}
                         </span>
                       )}
                     </div>
-                    <p className="text-[10px] text-gray-400 mt-0.5">{model.description}</p>
+                    <p className="text-[11px] text-[var(--muted)] mt-0.5 leading-snug">{model.description}</p>
                   </div>
                   {isSelected && (
-                    <div className="mt-1 shrink-0">
-                      <div
-                        className="w-2 h-2 rounded-full"
-                        style={{ backgroundColor: accentColor }}
-                      />
-                    </div>
+                    <Check className="w-3.5 h-3.5 text-[var(--bh-nile)] mt-1 shrink-0" />
                   )}
                 </button>
               );

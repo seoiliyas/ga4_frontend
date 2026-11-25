@@ -52,7 +52,7 @@ export function AuthImage({ src, alt, className, chatApi, ...rest }: AuthImagePr
   if (failed) {
     return (
       <div
-        className={`flex items-center justify-center bg-gray-100 text-gray-400 rounded-lg border border-gray-200 p-2 ${className || ''}`}
+        className={`flex items-center justify-center bg-[var(--surface-subtle)] text-[var(--muted)] rounded-lg border border-[var(--border)] p-2 ${className || ''}`}
         title={alt || 'Image unavailable'}
       >
         <ImageIcon className="w-4 h-4" />
@@ -63,7 +63,7 @@ export function AuthImage({ src, alt, className, chatApi, ...rest }: AuthImagePr
   if (!resolvedSrc) {
     return (
       <div
-        className={`animate-pulse bg-gray-100 rounded-lg ${className || 'w-full h-32'}`}
+        className={`animate-pulse bg-[var(--surface-subtle)] rounded-lg ${className || 'w-full h-32'}`}
         aria-label={alt || 'Loading image'}
       />
     );

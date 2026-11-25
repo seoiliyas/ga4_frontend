@@ -1,12 +1,13 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import {
   Plus,
   Pencil,
   Trash2,
-  User,
   MoreHorizontal,
   Users,
   LogOut,
+  Search,
+  X,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import InviteKeyPanel from './InviteKeyPanel';
@@ -59,7 +60,16 @@ function groupByDate(sessions: ChatSession[]): { label: string; items: ChatSessi
   return buckets.filter((b) => b.items.length > 0);
 }
 
-// ── Icons ────────────────────────────────────────────────────────────────────
+function getUserInitials(user?: AuthUser | null): string {
+  const source = (user?.username || user?.email || 'BH').trim();
+  const parts = source.split(/[\s._-]+/).filter(Boolean);
+  if (parts.length >= 2) {
+    return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
+  }
+  return source.slice(0, 2).toUpperCase();
+}
+
+// ── Brand & UI Icons ──────────────────────────────────────────────────────────
 
 export const BrightHorizonLogo = ({
   className,
@@ -69,21 +79,39 @@ export const BrightHorizonLogo = ({
   mode?: 'gtm' | 'ga4' | 'gtm_oauth';
 }) => {
   const isGa4 = mode === 'ga4';
-  const color = isGa4 ? '#e8710a' : '#1a3a5c';
-  const secondaryColor = isGa4 ? '#ff9d4d' : '#4facfe';
+  const hillFill = isGa4 ? '#3C889E' : '#0B8743';
+  const foregroundArc = '#1A475F';
 
   return (
-    <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" className={className}>
-      <rect x="4" y="8" width="20" height="16" rx="4" fill={color} />
-      <path d="M24 16L28 12V20L24 16Z" fill={color} />
-      <circle cx="9" cy="16" r="2" fill="white" />
-      <path d="M22 6L23.5 9L26.5 10.5L23.5 12L22 15L20.5 12L17.5 10.5L20.5 9L22 6Z" fill={secondaryColor} />
+    <svg
+      width="32"
+      height="32"
+      viewBox="0 0 32 32"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      className={className}
+      aria-hidden="true"
+    >
+      <rect x="1" y="1" width="30" height="30" rx="9" fill="#FFFFFF" stroke="#D8E3E8" strokeWidth="1.25" />
+      {/* Sun rays */}
+      <path
+        d="M16 5.2V7.2M9.3 8L10.7 9.4M22.7 8L21.3 9.4M6.6 14.5H8.6M23.4 14.5H25.4"
+        stroke="#F0BD1B"
+        strokeWidth="1.75"
+        strokeLinecap="round"
+      />
+      {/* Rising Buttercup Gold sun */}
+      <path d="M10.5 17.8A5.5 5.5 0 0 1 21.5 17.8H10.5Z" fill="#F0BD1B" />
+      {/* Mid horizon curve */}
+      <path d="M4.5 21.2C9.8 17.4 22.2 17.4 27.5 21.2V25.5H4.5V21.2Z" fill={hillFill} />
+      {/* Deep Nile foreground horizon */}
+      <path d="M4.5 23.4C11 20.6 21 20.6 27.5 23.4V25.6C27.5 26.9 26.4 28 25.1 28H6.9C5.6 28 4.5 26.9 4.5 25.6V23.4Z" fill={foregroundArc} />
     </svg>
   );
 };
 
 export const SidebarIcon = () => (
-  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
     <path
       fillRule="evenodd"
       clipRule="evenodd"
@@ -94,7 +122,7 @@ export const SidebarIcon = () => (
 );
 
 export const NewChatIcon = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none">
+  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
     <path
       d="M8 0.599609C3.91309 0.599609 0.599609 3.91309 0.599609 8C0.599609 9.13376 0.855461 10.2098 1.3125 11.1719L1.5918 11.7588L2.76562 11.2012L2.48633 10.6143C2.11034 9.82278 1.90039 8.93675 1.90039 8C1.90039 4.63106 4.63106 1.90039 8 1.90039C11.3689 1.90039 14.0996 4.63106 14.0996 8C14.0996 11.3689 11.3689 14.0996 8 14.0996C7.31041 14.0996 6.80528 14.0514 6.35742 13.9277C5.91623 13.8059 5.49768 13.6021 4.99707 13.2529C4.26492 12.7422 3.21611 12.5616 2.35156 13.1074L2.33789 13.1162L2.32422 13.126L1.58789 13.6436L2.01953 14.9297L3.0459 14.207C3.36351 14.0065 3.83838 14.0294 4.25293 14.3184C4.84547 14.7317 5.39743 15.011 6.01172 15.1807C6.61947 15.3485 7.25549 15.4004 8 15.4004C12.0869 15.4004 15.4004 12.0869 15.4004 8C15.4004 3.91309 12.0869 0.599609 8 0.599609ZM7.34473 4.93945V7.34961H4.93945V8.65039H7.34473V11.0605H8.64551V8.65039H11.0605V7.34961H8.64551V4.93945H7.34473Z"
       fill="currentColor"
@@ -114,7 +142,7 @@ interface SessionItemProps {
   chatApi: ChatApi;
 }
 
-function SessionItem({ session, isActive, mode, onSelect, onRenamed, onDeleted, chatApi }: SessionItemProps) {
+function SessionItem({ session, isActive, onSelect, onRenamed, onDeleted, chatApi }: SessionItemProps) {
   const [uiMode, setUiMode] = useState<'idle' | 'editing' | 'confirming-delete'>('idle');
   const [showMenu, setShowMenu] = useState(false);
   const [editValue, setEditValue] = useState(session.title);
@@ -129,8 +157,15 @@ function SessionItem({ session, isActive, mode, onSelect, onRenamed, onDeleted, 
         setShowMenu(false);
       }
     };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setShowMenu(false);
+    };
     document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
   }, [showMenu]);
 
   const startEdit = (e: React.MouseEvent) => {
@@ -182,17 +217,31 @@ function SessionItem({ session, isActive, mode, onSelect, onRenamed, onDeleted, 
     onDeleted(session.id);
   };
 
-  const activeColor = mode === 'ga4' ? '#e8710a' : '#1a3a5c';
-  const activeBg = mode === 'ga4' ? 'rgba(232, 113, 10, 0.08)' : 'rgba(26, 58, 92, 0.08)';
-
   return (
     <div
       onClick={uiMode === 'idle' ? onSelect : undefined}
-      className={`group relative flex flex-col rounded-xl px-3 py-3 mb-0.5 cursor-pointer select-none transition-all duration-150 border border-transparent ${
-        isActive ? '' : 'hover:bg-gray-50'
+      role={uiMode === 'idle' ? 'button' : undefined}
+      tabIndex={uiMode === 'idle' ? 0 : undefined}
+      aria-current={isActive ? 'page' : undefined}
+      onKeyDown={(e) => {
+        if (uiMode === 'idle' && (e.key === 'Enter' || e.key === ' ')) {
+          e.preventDefault();
+          onSelect();
+        }
+      }}
+      className={`group relative flex flex-col rounded-[10px] px-3 py-2.5 mb-1 cursor-pointer select-none transition-colors duration-150 ${
+        isActive
+          ? 'bg-[var(--bh-nile-soft)] text-[var(--bh-nile)]'
+          : 'text-[var(--fg-2)] hover:bg-[var(--surface-warm)]'
       }`}
-      style={isActive ? { backgroundColor: activeBg } : {}}
     >
+      {isActive && (
+        <span
+          aria-hidden="true"
+          className="absolute left-1 top-2 bottom-2 w-[3px] rounded-full bg-[var(--bh-buttercup)]"
+        />
+      )}
+
       {uiMode === 'editing' ? (
         <form onSubmit={confirmEdit} className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
           <input
@@ -206,54 +255,69 @@ function SessionItem({ session, isActive, mode, onSelect, onRenamed, onDeleted, 
                 cancelEdit();
               }
             }}
-            className="flex-1 min-w-0 text-xs rounded-lg px-2 py-1 outline-none bg-white border border-gray-200"
+            aria-label="Rename conversation"
+            className="flex-1 min-w-0 text-xs font-medium rounded-lg px-2.5 py-1.5 outline-none bg-white border border-[var(--bh-cerulean)] text-[var(--fg)]"
             autoFocus
           />
         </form>
       ) : uiMode === 'confirming-delete' ? (
-        <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
-          <span className="text-[10px] text-red-600 font-medium flex-1">Delete chat?</span>
-          <button onClick={confirmDelete} className="px-2 py-1 text-[10px] bg-red-500 text-white rounded-lg">
-            Yes
+        <div className="flex items-center gap-2 pl-1" onClick={(e) => e.stopPropagation()}>
+          <span className="text-xs text-[var(--danger)] font-semibold flex-1">Delete chat?</span>
+          <button
+            type="button"
+            onClick={confirmDelete}
+            className="px-2.5 py-1 text-[11px] font-semibold bg-[var(--danger)] text-white rounded-lg hover:opacity-90 transition-opacity"
+          >
+            Delete
           </button>
           <button
+            type="button"
             onClick={(e) => {
               e.stopPropagation();
               setUiMode('idle');
             }}
-            className="px-2 py-1 text-[10px] bg-gray-100 rounded-lg"
+            className="px-2.5 py-1 text-[11px] font-medium bg-[var(--surface-subtle)] text-[var(--fg-2)] rounded-lg hover:bg-[var(--border)] transition-colors"
           >
-            No
+            Cancel
           </button>
         </div>
       ) : (
-        <div className="flex items-center justify-between gap-2">
-          <p className="text-sm font-medium truncate flex-1 leading-snug" style={{ color: isActive ? activeColor : '#4a5a6a' }}>
+        <div className="flex items-center justify-between gap-2 pl-1">
+          <p
+            className={`text-[13px] truncate flex-1 leading-snug ${
+              isActive ? 'font-bold text-[var(--bh-nile)]' : 'font-medium text-[var(--fg-2)]'
+            }`}
+          >
             {session.title}
           </p>
           <div className="relative shrink-0" ref={menuRef}>
             <button
+              type="button"
+              aria-label={`Options for ${session.title}`}
+              aria-expanded={showMenu}
               onClick={(e) => {
                 e.stopPropagation();
                 setShowMenu(!showMenu);
               }}
-              className={`p-1 text-gray-400 hover:text-gray-600 transition-opacity ${
-                isActive || showMenu ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+              className={`p-1 rounded-md text-[var(--muted)] hover:text-[var(--bh-nile)] hover:bg-white/80 transition-all ${
+                isActive || showMenu ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 focus:opacity-100'
               }`}
             >
               <MoreHorizontal className="w-3.5 h-3.5" />
             </button>
             {showMenu && (
-              <div className="absolute right-0 top-full mt-1 w-32 bg-white rounded-xl shadow-xl border border-gray-100 z-50 overflow-hidden py-1 animate-zoom-in">
+              <div className="absolute right-0 top-full mt-1 w-32 bg-[var(--surface)] rounded-[10px] shadow-lg border border-[var(--border)] z-50 overflow-hidden py-1 animate-zoom-in">
                 <button
+                  type="button"
                   onClick={startEdit}
-                  className="w-full flex items-center gap-2 px-3 py-2 text-xs text-gray-600 hover:bg-gray-50"
+                  className="w-full flex items-center gap-2 px-3 py-2 text-xs font-medium text-[var(--fg-2)] hover:bg-[var(--surface-subtle)] hover:text-[var(--bh-nile)] transition-colors"
                 >
                   <Pencil className="w-3 h-3" /> Rename
                 </button>
                 <button
+                  type="button"
                   onClick={startDelete}
-                  className="w-full flex items-center gap-2 px-3 py-2 text-xs text-red-500 hover:bg-red-50"
+                  className="w-full flex items-center gap-2 px-3 py-2 text-xs font-medium text-[var(--danger)] hover:bg-[var(--danger-soft)] transition-colors"
                 >
                   <Trash2 className="w-3 h-3" /> Delete
                 </button>
@@ -283,45 +347,98 @@ function SidebarContent({
   onLogout,
 }: Omit<SidebarProps, 'isOpen'>) {
   const [showInvite, setShowInvite] = useState(false);
-  const grouped = groupByDate(sessions);
+  const [searchQuery, setSearchQuery] = useState('');
+
+  const filteredSessions = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return sessions;
+    return sessions.filter((s) => s.title.toLowerCase().includes(q));
+  }, [sessions, searchQuery]);
+
+  const grouped = useMemo(() => groupByDate(filteredSessions), [filteredSessions]);
+  const initials = getUserInitials(user);
 
   return (
-    <div className="flex flex-col h-full bg-white">
+    <div className="flex flex-col h-full bg-[var(--surface)]">
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 shrink-0">
-        <span className="font-bold text-sm tracking-tight text-gray-500">Chats</span>
-        <button
-          onClick={onToggle}
-          className="p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-600 rounded-xl transition-all duration-200"
-          title="Toggle Sidebar"
-        >
-          <SidebarIcon />
-        </button>
+      <div className="flex items-center justify-between px-4 h-14 border-b border-[var(--border-soft)] shrink-0">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <BrightHorizonLogo mode={mode} className="w-7 h-7 shrink-0" />
+          <div className="min-w-0">
+            <span className="font-extrabold text-sm tracking-tight text-[var(--bh-nile)] block leading-none">
+              BrightHorizon
+            </span>
+            <span className="text-[10px] font-semibold uppercase tracking-[0.07em] text-[var(--muted)] block mt-0.5">
+              {mode === 'ga4' ? 'GA4 Analyst' : 'GTM Auditor'}
+            </span>
+          </div>
+        </div>
+        {onToggle && (
+          <button
+            type="button"
+            onClick={onToggle}
+            className="p-2 text-[var(--muted)] hover:bg-[var(--surface-subtle)] hover:text-[var(--bh-nile)] rounded-[10px] transition-colors duration-150"
+            title="Collapse Sidebar"
+            aria-label="Collapse sidebar"
+          >
+            <SidebarIcon />
+          </button>
+        )}
       </div>
 
-      {/* New Chat Button */}
-      <div className="px-3 pb-4 pt-1 shrink-0">
+      {/* New Chat CTA & Optional Filter */}
+      <div className="px-3 pt-3 pb-3 space-y-2.5 shrink-0">
         <button
+          type="button"
           onClick={onNewChat}
-          className="w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-sm font-medium text-gray-700 bg-gray-50 hover:bg-gray-100 border border-gray-100/50 transition-all active:scale-[0.98]"
+          className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-[10px] text-sm font-bold text-white bg-[var(--bh-nile)] hover:bg-[var(--bh-nile-hover)] shadow-[0_2px_8px_rgba(26,71,95,0.18)] transition-all duration-150 active:scale-[0.98]"
         >
-          <div className="text-gray-500">
-            <Plus className="w-4 h-4" />
-          </div>
-          <span>New chat</span>
+          <Plus className="w-4 h-4 stroke-[2.25]" />
+          <span>New Chat</span>
         </button>
+
+        {sessions.length >= 5 && (
+          <div className="relative">
+            <Search className="w-3.5 h-3.5 text-[var(--muted)] absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Filter chats…"
+              aria-label="Filter conversations"
+              className="w-full pl-8 pr-7 py-1.5 text-xs bg-[var(--surface-warm)] border border-[var(--border)] rounded-[10px] text-[var(--fg)] placeholder:text-[var(--muted)] outline-none focus:bg-white focus:border-[var(--bh-cerulean)] transition-colors"
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery('')}
+                aria-label="Clear filter"
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-[var(--muted)] hover:text-[var(--fg)] p-0.5"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Sessions List */}
-      <nav className="flex-1 overflow-y-auto px-2 pb-4 scroll-smooth">
+      <nav className="flex-1 overflow-y-auto px-2.5 pb-4 scroll-smooth" aria-label="Conversation history">
         {grouped.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-32 opacity-30">
-            <p className="text-xs font-medium">No conversations yet</p>
+          <div className="flex flex-col items-center justify-center h-32 px-4 text-center">
+            <p className="text-xs font-semibold text-[var(--muted)]">
+              {searchQuery ? 'No matching chats' : 'No conversations yet'}
+            </p>
+            {!searchQuery && (
+              <p className="text-[11px] text-[var(--muted)]/80 mt-1">
+                Start a new audit chat above.
+              </p>
+            )}
           </div>
         ) : (
           grouped.map((group) => (
             <section key={group.label} className="mb-4">
-              <p className="text-[10px] font-bold uppercase tracking-[0.1em] px-3 mb-2 text-gray-400/80">
+              <p className="text-[10px] font-bold uppercase tracking-[0.08em] px-3 mb-1.5 text-[var(--muted)]">
                 {group.label}
               </p>
               {group.items.map((session) => (
@@ -342,44 +459,47 @@ function SidebarContent({
       </nav>
 
       {/* User Section */}
-      <div className="p-3 border-t border-gray-50 mt-auto bg-white/50 backdrop-blur-sm">
+      <div className="p-3 border-t border-[var(--border-soft)] mt-auto bg-[var(--surface-warm)]">
         {showInvite && (
           <div className="mb-3 animate-slide-in">
             <InviteKeyPanel onClose={() => setShowInvite(false)} authApi={authApi} mode={mode} />
           </div>
         )}
-        <div className="flex items-center gap-1">
-          <div className="flex-1 group flex items-center gap-3 px-3 py-2.5 rounded-2xl hover:bg-gray-50 transition-colors overflow-hidden">
-            <div className="w-8 h-8 rounded-full overflow-hidden bg-gradient-to-br from-gray-100 to-gray-200 flex items-center justify-center shrink-0 border border-gray-100">
-              <User className="w-4 h-4 text-gray-500" />
+        <div className="flex items-center gap-1.5">
+          <div className="flex-1 flex items-center gap-2.5 px-2.5 py-2 rounded-[10px] bg-white border border-[var(--border-soft)] overflow-hidden">
+            <div className="w-8 h-8 rounded-[10px] bg-[var(--bh-nile-soft)] border border-[#C6DCE5] flex items-center justify-center shrink-0">
+              <span className="text-xs font-extrabold text-[var(--bh-nile)]">{initials}</span>
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold text-gray-700 truncate leading-tight">
+              <p className="text-xs font-bold text-[var(--fg)] truncate leading-tight">
                 {user?.username || 'Guest User'}
               </p>
-              <p className="text-[11px] text-gray-400 truncate mt-0.5">
+              <p className="text-[11px] text-[var(--muted)] truncate mt-0.5">
                 {user?.email || 'Sign in to sync'}
               </p>
             </div>
           </div>
           <button
+            type="button"
             onClick={() => setShowInvite(!showInvite)}
-            className={`p-2.5 rounded-xl transition-all duration-200 ${
+            className={`p-2.5 rounded-[10px] border transition-colors duration-150 ${
               showInvite
-                ? mode === 'ga4'
-                  ? 'bg-orange-50 text-orange-600'
-                  : 'bg-blue-50 text-blue-700'
-                : 'text-gray-400 hover:bg-gray-50 hover:text-gray-600'
+                ? 'bg-[var(--bh-nile-soft)] border-[#C6DCE5] text-[var(--bh-nile)]'
+                : 'bg-white border-[var(--border-soft)] text-[var(--muted)] hover:border-[var(--bh-cerulean)] hover:text-[var(--bh-nile)]'
             }`}
             title="Invite Team Members"
+            aria-label="Invite team members"
+            aria-expanded={showInvite}
           >
             <Users className="w-4 h-4" />
           </button>
           {onLogout && (
             <button
+              type="button"
               onClick={onLogout}
-              className="p-2.5 rounded-xl transition-all duration-200 text-gray-400 hover:bg-red-50 hover:text-red-600"
+              className="p-2.5 rounded-[10px] bg-white border border-[var(--border-soft)] text-[var(--muted)] hover:bg-[var(--danger-soft)] hover:border-[#F4C6C6] hover:text-[var(--danger)] transition-colors duration-150"
               title="Sign Out"
+              aria-label="Sign out"
             >
               <LogOut className="w-4 h-4" />
             </button>
@@ -402,7 +522,7 @@ export function Sidebar(props: SidebarProps) {
           opacity: isOpen ? 1 : 0,
         }}
         transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-        className="hidden md:flex flex-col shrink-0 border-r border-gray-100 overflow-hidden bg-white"
+        className="hidden md:flex flex-col shrink-0 border-r border-[var(--border)] overflow-hidden bg-[var(--surface)]"
       >
         <SidebarContent {...props} />
       </motion.aside>
@@ -416,7 +536,7 @@ export function Sidebar(props: SidebarProps) {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={onToggle}
-              className="fixed inset-0 z-20 bg-black/30 backdrop-blur-[1px] md:hidden"
+              className="fixed inset-0 z-20 bg-[#0E2633]/35 backdrop-blur-[2px] md:hidden"
             />
             <motion.aside
               key="mobile-drawer"
@@ -424,7 +544,7 @@ export function Sidebar(props: SidebarProps) {
               animate={{ x: 0 }}
               exit={{ x: -288 }}
               transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-              className="fixed inset-y-0 left-0 z-30 flex flex-col w-72 bg-white shadow-2xl md:hidden"
+              className="fixed inset-y-0 left-0 z-30 flex flex-col w-72 bg-[var(--surface)] shadow-2xl md:hidden"
             >
               <SidebarContent {...props} />
             </motion.aside>

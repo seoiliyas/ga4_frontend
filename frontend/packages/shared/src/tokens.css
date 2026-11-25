@@ -1,0 +1,94 @@
+/* ───────────────────────────────────────────────────────────────────────────
+ * BrightHorizon Design System Tokens
+ * Aligned with https://www.brighthorizons.com/ & OpenDesign token contract.
+ * ─────────────────────────────────────────────────────────────────────────── */
+
+:root {
+  /* Bright Horizons Brand Core */
+  --bh-nile-deep: #0e2633;
+  --bh-nile: #1a475f;
+  --bh-nile-hover: #215a78;
+  --bh-nile-soft: #ebf3f6;
+  --bh-cerulean: #3c889e;
+  --bh-sky: #54afcb;
+  --bh-ice: #92d9e7;
+
+  --bh-buttercup: #f0bd1b;
+  --bh-buttercup-hover: #dda90d;
+  --bh-buttercup-active: #c89708;
+  --bh-buttercup-soft: #fef8e2;
+  --bh-buttercup-border: #f3dc8c;
+  --bh-buttercup-ink: #7d5b00;
+
+  --bh-emerald: #0b8743;
+  --bh-emerald-soft: #ecf8f1;
+  --bh-emerald-border: #b8e3ca;
+
+  /* OpenDesign Standard Layer A/B Semantic Tokens */
+  --bg: #f3f6f7;
+  --surface: #ffffff;
+  --surface-subtle: #ebf1f4;
+  --surface-warm: #f8fafb;
+
+  --fg: #142632;
+  --fg-2: #464646;
+  --muted: #5b6e7a;
+  --meta: #3c889e;
+
+  --border: #d8e3e8;
+  --border-soft: #e9eff2;
+
+  /* Primary interactive accent (Buttercup Gold CTA with Deep Nile ink) */
+  --accent: #f0bd1b;
+  --accent-on: #0e2633;
+  --accent-hover: #dda90d;
+  --accent-active: #c89708;
+
+  /* Structural brand accent (Nile Blue with crisp white ink) */
+  --brand: #1a475f;
+  --brand-on: #ffffff;
+  --brand-hover: #215a78;
+
+  /* Semantic Status */
+  --success: #0b8743;
+  --success-soft: #ecf8f1;
+  --warn: #c48d00;
+  --warn-soft: #fef8e2;
+  --danger: #bd0f0f;
+  --danger-soft: #fef3f3;
+
+  /* Typography */
+  --font-display: 'Mulish', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-body: 'Mulish', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+
+  /* Spacing Scale (4px baseline) */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-12: 48px;
+
+  /* Radius Scale (Bright Horizons 10px controls + 16px containers) */
+  --radius-sm: 8px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --radius-pill: 9999px;
+
+  /* Elevation (Tinted cool Nile shadows, restrained) */
+  --elev-flat: none;
+  --elev-ring: 0 0 0 1px var(--border);
+  --elev-raised: 0 4px 16px rgba(20, 38, 50, 0.08);
+  --elev-modal: 0 18px 48px rgba(14, 38, 51, 0.16);
+
+  /* Focus Ring (WCAG 2.2 AA >= 3:1) */
+  --focus-ring: 0 0 0 2px #ffffff, 0 0 0 4px rgba(26, 71, 95, 0.65);
+
+  /* Motion (Material 3 standard curve) */
+  --motion-fast: 150ms;
+  --motion-base: 220ms;
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+}

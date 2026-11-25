@@ -25,7 +25,7 @@ interface Turn {
   index: number;
 }
 
-export function ChatOutline({ messages, mode, activeMessageId, onJumpTo }: Props) {
+export function ChatOutline({ messages, activeMessageId, onJumpTo }: Props) {
   const [hovered, setHovered] = useState(false);
 
   const turns = useMemo(() => {
@@ -67,40 +67,19 @@ export function ChatOutline({ messages, mode, activeMessageId, onJumpTo }: Props
     return turnsList;
   }, [messages]);
 
-  const accentColor = mode === 'ga4' ? '#e8710a' : '#1a3a5c';
-
   return (
     <div
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
-      style={{
-        position: 'absolute',
-        right: 0,
-        top: 0,
-        bottom: 0,
-        display: 'flex',
-        alignItems: 'center',
-        zIndex: 20,
-        pointerEvents: turns.length === 0 ? 'none' : 'auto',
-      }}
+      className="absolute right-0 top-0 bottom-0 flex items-center z-20"
+      style={{ pointerEvents: turns.length === 0 ? 'none' : 'auto' }}
     >
       {/* Expanded panel — slides in on hover */}
       <div
+        className="absolute right-3.5 bg-[var(--surface)] border border-[var(--border)] rounded-xl shadow-[var(--elev-modal)] min-w-[240px] max-w-[280px] max-h-[380px] overflow-y-auto p-1.5 transition-all duration-150"
         style={{
-          position: 'absolute',
-          right: 14,
-          background: '#ffffff',
-          border: '0.5px solid #e5e7eb',
-          borderRadius: 14,
-          boxShadow: '0 4px 24px rgba(0,0,0,0.10)',
-          minWidth: 240,
-          maxWidth: 280,
-          maxHeight: 380,
-          overflowY: 'auto',
-          padding: '8px 4px',
           opacity: hovered ? 1 : 0,
           transform: hovered ? 'translateX(0) scale(1)' : 'translateX(8px) scale(0.97)',
-          transition: 'opacity 0.18s ease, transform 0.18s ease',
           pointerEvents: hovered ? 'auto' : 'none',
         }}
       >
@@ -108,85 +87,46 @@ export function ChatOutline({ messages, mode, activeMessageId, onJumpTo }: Props
           const isActive =
             activeMessageId === turn.userMsg.id ||
             (turn.modelMsg && activeMessageId === turn.modelMsg.id);
+          const promptTitle = truncate(turn.userMsg.text || 'Attachment');
 
           return (
             <button
               key={turn.id}
+              type="button"
               onClick={() => onJumpTo(turn.id)}
-              style={{
-                width: '100%',
-                display: 'block',
-                textAlign: 'left',
-                padding: '7px 12px',
-                borderRadius: 9,
-                border: 'none',
-                background: isActive
-                  ? mode === 'ga4'
-                    ? 'rgba(232,113,10,0.07)'
-                    : 'rgba(26,58,92,0.07)'
-                  : 'transparent',
-                cursor: 'pointer',
-                transition: 'background 0.12s',
-                marginBottom: 4,
-              }}
-              onMouseEnter={(e) => {
-                if (!isActive) (e.currentTarget as HTMLButtonElement).style.background = '#f9fafb';
-              }}
-              onMouseLeave={(e) => {
-                if (!isActive) (e.currentTarget as HTMLButtonElement).style.background = 'transparent';
-              }}
+              aria-label={`Jump to prompt ${turn.index + 1}: ${promptTitle}`}
+              className={`w-full block text-left px-3 py-2 rounded-[10px] mb-1 transition-colors duration-150 ${
+                isActive ? 'bg-[var(--bh-nile-soft)]' : 'hover:bg-[var(--surface-warm)]'
+              }`}
             >
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <div className="flex items-center gap-2.5">
                 <span
-                  style={{
-                    flexShrink: 0,
-                    width: 20,
-                    height: 20,
-                    borderRadius: 5,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    fontSize: 10,
-                    fontWeight: 600,
-                    color: isActive ? accentColor : '#9ca3af',
-                    background: isActive ? 'transparent' : '#f3f4f6',
-                  }}
+                  className={`shrink-0 w-5 h-5 rounded-md flex items-center justify-center text-[10px] font-bold tabular-nums ${
+                    isActive
+                      ? 'bg-[var(--bh-buttercup)] text-[var(--bh-nile-deep)]'
+                      : 'bg-[var(--surface-subtle)] text-[var(--muted)]'
+                  }`}
                 >
                   {turn.index + 1}
                 </span>
 
                 <span
-                  style={{
-                    fontSize: 12,
-                    lineHeight: 1.4,
-                    color: isActive ? accentColor : '#4a5a6a',
-                    fontWeight: isActive ? 600 : 400,
-                    whiteSpace: 'nowrap',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    flex: 1,
-                  }}
+                  className={`text-xs leading-snug truncate flex-1 ${
+                    isActive ? 'text-[var(--bh-nile)] font-bold' : 'text-[var(--fg-2)] font-medium'
+                  }`}
                 >
-                  {truncate(turn.userMsg.text || 'Attachment')}
+                  {promptTitle}
                 </span>
               </div>
 
               <div
-                style={{
-                  marginTop: 6,
-                  marginLeft: 30,
-                  fontSize: 10,
-                  lineHeight: 1.3,
-                  color: '#9ca3af',
-                  whiteSpace: 'nowrap',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  fontStyle: turn.modelMsg ? 'normal' : 'italic',
-                }}
+                className={`mt-1 ml-7.5 text-[10px] leading-snug truncate ${
+                  turn.modelMsg ? 'text-[var(--muted)]' : 'text-[var(--bh-cerulean)] italic'
+                }`}
               >
                 {turn.modelMsg
                   ? `↳ ${truncateMultiline(turn.modelMsg.text, 50)}`
-                  : '⌛ awaiting response…'}
+                  : 'Awaiting response…'}
               </div>
             </button>
           );
@@ -195,16 +135,8 @@ export function ChatOutline({ messages, mode, activeMessageId, onJumpTo }: Props
 
       {/* Collapsed dash indicators (one per turn) */}
       <div
-        style={{
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'flex-end',
-          gap: 6,
-          paddingRight: 4,
-          opacity: hovered ? 0 : 1,
-          transition: 'opacity 0.15s ease',
-          pointerEvents: 'none',
-        }}
+        className="flex flex-col items-end gap-1.5 pr-1.5 transition-opacity duration-150 pointer-events-none"
+        style={{ opacity: hovered ? 0 : 1 }}
       >
         {turns.map((turn) => {
           const isActive =
@@ -213,13 +145,9 @@ export function ChatOutline({ messages, mode, activeMessageId, onJumpTo }: Props
           return (
             <div
               key={turn.id}
-              style={{
-                width: isActive ? 20 : 14,
-                height: 2,
-                borderRadius: 2,
-                background: isActive ? accentColor : '#d1d5db',
-                transition: 'width 0.2s ease, background 0.2s ease',
-              }}
+              className={`h-[2.5px] rounded-full transition-all duration-200 ${
+                isActive ? 'w-5 bg-[var(--bh-nile)]' : 'w-3.5 bg-[#C2D1D8]'
+              }`}
             />
           );
         })}
